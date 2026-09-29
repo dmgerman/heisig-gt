@@ -44,7 +44,7 @@
 ;; Anki collection on every refresh, so the Status, Interval, Reps and
 ;; Due columns show what Anki shows today without a rebuild.
 ;;
-;; Start with \\[heisig-gt-list].
+;; Start with \\[heisig-gt-kanji].
 
 ;;; Code:
 
@@ -56,7 +56,7 @@
 ;; Required after the group above, which their options are declared in.
 (require 'heisig-gt-db)
 (require 'heisig-gt-detail)
-(require 'heisig-gt-list)
+(require 'heisig-gt-kanji)
 (require 'heisig-gt-words)
 
 (provide 'heisig-gt)

@@ -16,7 +16,7 @@ heisig-gt
 
 * heisig-gt::
 * Getting started::
-* The list buffer::
+* The kanji list::
 * The word list::
 * The detail buffer::
 * Study progress::
@@ -31,7 +31,7 @@ Getting started
 * Build the database::
 * Load it::
 
-The list buffer
+The kanji list
 
 * Columns::
 * Filters::
@@ -66,7 +66,7 @@ progress file of its own, so what you see is what Anki will show you.
 to the Anki collection.
 
 
-File: heisig-gt.info,  Node: Getting started,  Next: The list buffer,  Prev: heisig-gt,  Up: Top
+File: heisig-gt.info,  Node: Getting started,  Next: The kanji list,  Prev: heisig-gt,  Up: Top
 
 2 Getting started
 *****************
@@ -104,25 +104,33 @@ File: heisig-gt.info,  Node: Load it,  Prev: Build the database,  Up: Getting st
 
      (use-package heisig-gt
        :load-path "~/.emacs.d/modules/dmg/heisig-gt"
-       :commands (heisig-gt-list heisig-gt-detail-show))
+       :commands (heisig-gt-kanji heisig-gt-detail-show))
 
-   Then ‘M-x heisig-gt-list’.
+   Then ‘M-x heisig-gt-kanji’.
 
 
-File: heisig-gt.info,  Node: The list buffer,  Next: The word list,  Prev: Getting started,  Up: Top
+File: heisig-gt.info,  Node: The kanji list,  Next: The word list,  Prev: Getting started,  Up: Top
 
-3 The list buffer
-*****************
+3 The kanji list
+****************
 
-Each row is one kanji, or one of Heisig's primitives — the elements such
-as ‘[apron]’ that the book names but Unicode does not encode as
+‘M-x heisig-gt-kanji’ opens it.  With a prefix argument it reads a
+character and puts point on its row; ‘C-u M-x heisig-gt-kanji RET 目’
+goes straight to 目.  When that character has no row the point is left
+where it was and a message says why — the database has no entry for it,
+or the active filters exclude it, which are different problems and call
+for different answers.
+
+   Each row is one kanji, or one of Heisig's primitives — the elements
+such as ‘[apron]’ that the book names but Unicode does not encode as
 characters of their own.
 
 Key     Does
 -----------------------------------------------------
 ‘RET’   show the kanji at point in detail
 ‘TAB’   the same, in the other window
-‘w’     copy the character to the kill ring
+‘w’     list the words written with it
+‘M-w’   copy the character to the kill ring
 ‘/’     add a filter (‘C-u /’ to negate it)
 ‘D’     remove one filter
 ‘c’     show or hide one column
@@ -141,14 +149,15 @@ Key     Does
 * Component names::
 
 
-File: heisig-gt.info,  Node: Columns,  Next: Filters,  Up: The list buffer
+File: heisig-gt.info,  Node: Columns,  Next: Filters,  Up: The kanji list
 
 3.1 Columns
 ===========
 
-‘heisig-gt-list-columns’ is both the set of columns displayed and their
+‘heisig-gt-kanji-columns’ is both the set of columns displayed and their
 left-to-right order, so showing, hiding and reordering are one setting
-rather than three.  Every column lives in ‘heisig-gt-list-column-alist’:
+rather than three.  Every column lives in
+‘heisig-gt-kanji-column-alist’:
 
      heisig      Heisig frame number, sixth edition
      char        the character itself
@@ -182,7 +191,7 @@ and is shown whole.  Widths are counted in display columns, so a kanji
 takes two of them.
 
 
-File: heisig-gt.info,  Node: Filters,  Next: Readings,  Prev: Columns,  Up: The list buffer
+File: heisig-gt.info,  Node: Filters,  Next: Readings,  Prev: Columns,  Up: The kanji list
 
 3.2 Filters
 ===========
@@ -217,7 +226,7 @@ stored as you typed it, so a bookmarked view keeps its meaning.
 ‘[jlpt=5,4 !status=suspended] 25/2000’.
 
 
-File: heisig-gt.info,  Node: Readings,  Next: Saving a view,  Prev: Filters,  Up: The list buffer
+File: heisig-gt.info,  Node: Readings,  Next: Saving a view,  Prev: Filters,  Up: The kanji list
 
 3.3 Readings
 ============
@@ -242,7 +251,7 @@ keeps them.  A reading ending in a small tsu becomes ‘t’, so ‘ハッ’ is
 ‘hat’ and does not collapse onto ‘ハ’.
 
 
-File: heisig-gt.info,  Node: Saving a view,  Next: Component names,  Prev: Readings,  Up: The list buffer
+File: heisig-gt.info,  Node: Saving a view,  Next: Component names,  Prev: Readings,  Up: The kanji list
 
 3.4 Saving a view
 =================
@@ -250,11 +259,11 @@ File: heisig-gt.info,  Node: Saving a view,  Next: Component names,  Prev: Readi
 ‘M-x bookmark-set’ stores the displayed columns, the active filters and
 the sort key.  Jumping to it restores those three and re-reads the data.
 
-   Set ‘heisig-gt-list-persist-state’ to have the view survive between
-sessions; it is written to ‘heisig-gt-list-state-file’.
+   Set ‘heisig-gt-kanji-persist-state’ to have the view survive between
+sessions; it is written to ‘heisig-gt-kanji-state-file’.
 
 
-File: heisig-gt.info,  Node: Component names,  Prev: Saving a view,  Up: The list buffer
+File: heisig-gt.info,  Node: Component names,  Prev: Saving a view,  Up: The kanji list
 
 3.5 Component names
 ===================
@@ -279,14 +288,17 @@ those, and ‘null’, ‘nan’ and ‘undefined’, as absent, so no component
 named ‘None’ and no filter offers it.
 
 
-File: heisig-gt.info,  Node: The word list,  Next: The detail buffer,  Prev: The list buffer,  Up: Top
+File: heisig-gt.info,  Node: The word list,  Next: The detail buffer,  Prev: The kanji list,  Up: Top
 
 4 The word list
 ***************
 
 ‘M-x heisig-gt-words’ lists Japanese words rather than kanji, ordered by
-how often they occur in Netflix subtitles.  From the kanji list, ‘W’
-opens it seeded with the kanji at point.
+how often they occur in Netflix subtitles.  From the kanji list or the
+detail buffer, ‘w’ opens it seeded with the kanji at point.  Going back
+the other way, ‘k’ opens the detail of one of the word's kanji and ‘K’
+goes to its row in the kanji list; both ask which kanji when the word is
+written with more than one.
 
    A word buffer has a *seed* — the characters whose words were loaded —
 and filters that narrow what the seed brought in.  The mode line names
@@ -294,10 +306,12 @@ the seed first, then the filters, then the counts: ‘[目] [kanji=的]
 1/82’.
 
 Key     Does
---------------------------------------------------
+---------------------------------------------------
+‘k’     show the detail of a kanji of the word
+‘RET’   the same
+‘K’     go to that kanji's row in the kanji list
 ‘S’     reseed (replaces the seed; empty = all)
-‘RET’   show a kanji of the word at point
-‘w’     copy the word to the kill ring
+‘M-w’   copy the word to the kill ring
 
    Columns, filtering, sorting, bookmarks and saved views work exactly
 as they do in the kanji list — it is the same mode underneath, with its
@@ -390,8 +404,10 @@ Key     Does
 ‘RET’   follow the component at point
 ‘n’     next Heisig frame
 ‘p’     previous Heisig frame
-‘w’     copy the character to the kill ring
-‘l’     back to the list
+‘w’     list the words written with it
+‘k’     go to its row in the kanji list
+‘l’     the same
+‘M-w’   copy the character to the kill ring
 ‘g’     redraw
 ‘q’     quit
 
@@ -485,24 +501,24 @@ GPL-3.0-or-later.  See ‘LICENSE’.
 
 Tag Table:
 Node: Top223
-Node: heisig-gt737
-Node: Getting started1654
-Node: Build the database1836
-Node: Load it2436
-Node: The list buffer2724
-Node: Columns3633
-Node: Filters5212
-Node: Readings6912
-Node: Saving a view8186
-Node: Component names8618
-Node: The word list9814
-Node: How much to load11615
-Node: Where the words come from12335
-Node: The detail buffer13835
-Node: Study progress14824
-Node: Where the data comes from15836
-Node: Development17016
-Node: License17963
+Node: heisig-gt735
+Node: Getting started1652
+Node: Build the database1833
+Node: Load it2433
+Node: The kanji list2723
+Node: Columns4063
+Node: Filters5643
+Node: Readings7342
+Node: Saving a view8615
+Node: Component names9048
+Node: The word list10243
+Node: How much to load12336
+Node: Where the words come from13056
+Node: The detail buffer14556
+Node: Study progress15624
+Node: Where the data comes from16636
+Node: Development17816
+Node: License18763
 
 End Tag Table
 

@@ -26,10 +26,10 @@
 
 ;; `heisig-gt-words' lists Japanese words, ordered by how often they
 ;; occur in Netflix subtitles, seeded by the kanji they are written
-;; with.  From the kanji list, \\[heisig-gt-list-words] seeds it with
+;; with.  From the kanji list, \\[heisig-gt-kanji-words] seeds it with
 ;; the kanji at point.
 ;;
-;; The mode derives from `heisig-gt-list-mode' and supplies its own
+;; The mode derives from `heisig-gt-kanji-mode' and supplies its own
 ;; column and filter registries; everything else -- rendering,
 ;; sorting, the filter algebra, bookmarks, saved views -- is that
 ;; mode's and behaves identically here.
@@ -40,7 +40,7 @@
 ;;; Code:
 
 (require 'heisig-gt-db)
-(require 'heisig-gt-list)
+(require 'heisig-gt-kanji)
 (require 'seq)
 (require 'subr-x)
 
@@ -157,7 +157,7 @@ rather than wrongly marked as hard."
    (cons 'rank       (list :name "Rank" :width 6
                            :value #'heisig-gt-words--rank
                            :face 'font-lock-constant-face
-                           :sort (heisig-gt-list--number-compare :rank)
+                           :sort (heisig-gt-kanji--number-compare :rank)
                            :doc "Position in the Netflix frequency order."))
    (cons 'root       (list :name "Word" :width 14
                            :value #'heisig-gt-words--root
@@ -190,22 +190,22 @@ rather than wrongly marked as hard."
    (cons 'jlpt       (list :name "JLPT" :width 4
                            :value #'heisig-gt-words--jlpt
                            :face nil
-                           :sort (heisig-gt-list--number-compare :jlpt)
+                           :sort (heisig-gt-kanji--number-compare :jlpt)
                            :doc "JLPT level; only N5, N4 and N3 exist."))
    (cons 'count      (list :name "Count" :width 8
                            :value #'heisig-gt-words--count
                            :face nil
-                           :sort (heisig-gt-list--number-compare :count)
+                           :sort (heisig-gt-kanji--number-compare :count)
                            :doc "Times the word occurs in the corpus."))
    (cons 'pct        (list :name "%" :width 6
                            :value #'heisig-gt-words--pct
                            :face nil
-                           :sort (heisig-gt-list--number-compare :pct)
+                           :sort (heisig-gt-kanji--number-compare :pct)
                            :doc "Share of all words spoken."))
    (cons 'cum-pct    (list :name "Cum" :width 7
                            :value #'heisig-gt-words--cum-pct
                            :face 'font-lock-comment-face
-                           :sort (heisig-gt-list--number-compare :cum-pct)
+                           :sort (heisig-gt-kanji--number-compare :cum-pct)
                            :doc "Share covered by this word and every \
 commoner one."))
    (cons 'definition (list :name "Definition" :width 60
@@ -213,13 +213,13 @@ commoner one."))
                            :face nil :sort t
                            :doc "English senses, commonest first.")))
   "Column registry for the word list buffer.
-Same shape as `heisig-gt-list-column-alist'; see its docstring.")
+Same shape as `heisig-gt-kanji-column-alist'; see its docstring.")
 
 ;;;; Filter registry
 
 (defvar heisig-gt-words-filter-alist nil
   "Filters offered in a `heisig-gt-words' buffer.
-Same shape as `heisig-gt-list-filter-alist'; see its docstring.")
+Same shape as `heisig-gt-kanji-filter-alist'; see its docstring.")
 
 (defun heisig-gt-words--pos-tags ()
   "Return every distinct part-of-speech tag in this buffer, sorted.
@@ -229,7 +229,7 @@ about a hundred of the first and over a thousand of the second."
   (sort (delete-dups
          (seq-mapcat (lambda (word)
                        (split-string (or (plist-get word :pos) "") " " t))
-                     heisig-gt-list--kanji))
+                     heisig-gt-kanji--records))
         #'string-lessp))
 
 (defun heisig-gt-words--seed-chars (prompt)
@@ -321,10 +321,10 @@ levels; `none' is those above N3 or unlisted.")))
              (cons 'by-rank
                    (list :name "Rank"
                          :reader (lambda ()
-                                   (heisig-gt-list--read-range "Ranks"))
+                                   (heisig-gt-kanji--read-range "Ranks"))
                          :predicate
                          (lambda (word spec)
-                           (heisig-gt-list--in-range-p
+                           (heisig-gt-kanji--in-range-p
                             (plist-get word :rank) spec))
                          :doc "Show only words in a range of frequency \
 ranks.")))
@@ -366,22 +366,41 @@ regexp.")))
     (kill-new word)
     (message "Copied %s" word)))
 
+(defun heisig-gt-words--read-kanji (prompt)
+  "Return a kanji of the word at point, asking with PROMPT.
+The question is only put when the word is written with more than
+one kanji; with a single one there is nothing to choose.
+
+Only the characters the kanji database has an entry for are
+offered: the vocabulary comes from a subtitle corpus and the
+kanji from Anki decks, so a word can be written with a character
+neither the list nor the detail buffer has anything to say about,
+and offering it would be offering a dead end."
+  (let* ((root (plist-get (heisig-gt-words--require-word) :root))
+         (chars (seq-uniq
+                 (seq-filter (lambda (ch)
+                               (heisig-gt-db-known-p (char-to-string ch)))
+                             (string-to-list root)))))
+    (unless chars
+      (user-error "No kanji in %s is in the database" root))
+    (if (cdr chars)
+        (completing-read prompt (mapcar #'char-to-string chars) nil t)
+      (char-to-string (car chars)))))
+
 (defun heisig-gt-words-show-kanji ()
   "Show the detail of a kanji the word at point is written with."
   (interactive nil heisig-gt-words-mode)
-  (let* ((root (plist-get (heisig-gt-words--require-word) :root))
-         (chars (seq-filter (lambda (ch)
-                              (heisig-gt-db-known-p (char-to-string ch)))
-                            (string-to-list root))))
-    (unless chars
-      (user-error "No kanji in %s is in the database" root))
-    (heisig-gt-detail-show
-     (char-to-string
-      (if (cdr chars)
-          (string-to-char (completing-read "Kanji: "
-                                           (mapcar #'char-to-string chars)
-                                           nil t))
-        (car chars))))))
+  (heisig-gt-detail-show (heisig-gt-words--read-kanji "Show kanji: ")))
+
+(defun heisig-gt-words-kanji-list ()
+  "Show the kanji list, on a kanji the word at point is written with.
+
+Where \[heisig-gt-words-show-kanji] opens the one character,
+this goes to its row in the kanji list, so what surrounds it in
+Heisig's order is there too.  A character the list's own filters
+exclude is reported rather than jumped to."
+  (interactive nil heisig-gt-words-mode)
+  (heisig-gt-kanji (heisig-gt-words--read-kanji "Go to kanji: ")))
 
 (defun heisig-gt-words-set-seed (chars)
   "Reload the buffer seeded with CHARS, replacing any present seed.
@@ -392,20 +411,26 @@ already here, add a by-kanji filter instead."
                       "Seed with (empty for all): "))
                heisig-gt-words-mode)
   (setq heisig-gt-words--seed chars)
-  (heisig-gt-list--reload)
-  (heisig-gt-list--redraw-preserving-point))
+  (heisig-gt-kanji--reload)
+  (heisig-gt-kanji--redraw-preserving-point))
 
 ;;;; Mode
 
 (defvar-keymap heisig-gt-words-mode-map
   :doc "Keymap for `heisig-gt-words-mode'."
-  :parent heisig-gt-list-mode-map
+  :parent heisig-gt-kanji-mode-map
+  "k"   #'heisig-gt-words-show-kanji
+  "K"   #'heisig-gt-words-kanji-list
   "RET" #'heisig-gt-words-show-kanji
   "TAB" #'heisig-gt-words-show-kanji
-  "w"   #'heisig-gt-words-copy
-  "S"   #'heisig-gt-words-set-seed)
+  "M-w" #'heisig-gt-words-copy
+  "S"   #'heisig-gt-words-set-seed
+  ;; `w' opens the word list everywhere else in the package; shadowed
+  ;; here rather than left inherited, because the command behind it
+  ;; reads a kanji from the row and a word row has none.
+  "w"   #'undefined)
 
-(define-derived-mode heisig-gt-words-mode heisig-gt-list-mode "Heisig-gt-words"
+(define-derived-mode heisig-gt-words-mode heisig-gt-kanji-mode "Heisig-gt-words"
   "Major mode for the read-only word list buffer.
 
 Each row is one Japanese word, ordered by how often it occurs in
@@ -417,8 +442,9 @@ The buffer has a seed -- the characters whose words were loaded
 -- and filters that narrow what the seed brought in.  The mode
 line names the seed first, then the filters, then the counts.
 
+  \\[heisig-gt-words-show-kanji] show the detail of a kanji of the word at point
+  \\[heisig-gt-words-kanji-list] go to that kanji's row in the kanji list
   \\[heisig-gt-words-set-seed] reseed (replaces; empty for every word)
-  \\[heisig-gt-words-show-kanji] show a kanji of the word at point
   \\[heisig-gt-words-copy] copy the word to the kill ring
 
 Filters are by-kanji, by-romaji, by-reading, by-pos, by-jlpt,
@@ -426,21 +452,21 @@ by-rank, by-definition-regexp, and unfilter.  by-kanji narrows to
 the words also written with a further character, and by-romaji
 searches the pronunciation without needing an input method.
 Everything else -- columns, sorting, bookmarks, saved views --
-works as it does in `heisig-gt-list-mode'.
+works as it does in `heisig-gt-kanji-mode'.
 
 \\{heisig-gt-words-mode-map}"
-  (setq heisig-gt-list--column-registry heisig-gt-words-column-alist)
-  (setq heisig-gt-list--filter-registry heisig-gt-words-filter-alist)
-  (setq heisig-gt-list--reload-function #'heisig-gt-words--reload)
-  (setq heisig-gt-list--id-function (lambda (word) (plist-get word :rank)))
-  (setq heisig-gt-list--default-columns heisig-gt-words-columns)
-  (setq heisig-gt-list--default-sort-key heisig-gt-words-default-sort-key)
-  (setq heisig-gt-list--bookmark-handler #'heisig-gt-words-bookmark-jump)
-  (setq heisig-gt-list--scope-function #'heisig-gt-words--scope)
-  (setq heisig-gt-list--columns heisig-gt-words-columns)
-  (setq tabulated-list-format (heisig-gt-list--format))
+  (setq heisig-gt-kanji--column-registry heisig-gt-words-column-alist)
+  (setq heisig-gt-kanji--filter-registry heisig-gt-words-filter-alist)
+  (setq heisig-gt-kanji--reload-function #'heisig-gt-words--reload)
+  (setq heisig-gt-kanji--id-function (lambda (word) (plist-get word :rank)))
+  (setq heisig-gt-kanji--default-columns heisig-gt-words-columns)
+  (setq heisig-gt-kanji--default-sort-key heisig-gt-words-default-sort-key)
+  (setq heisig-gt-kanji--bookmark-handler #'heisig-gt-words-bookmark-jump)
+  (setq heisig-gt-kanji--scope-function #'heisig-gt-words--scope)
+  (setq heisig-gt-kanji--columns heisig-gt-words-columns)
+  (setq tabulated-list-format (heisig-gt-kanji--format))
   (setq tabulated-list-sort-key
-        (heisig-gt-list--valid-sort-key heisig-gt-words-default-sort-key))
+        (heisig-gt-kanji--valid-sort-key heisig-gt-words-default-sort-key))
   (tabulated-list-init-header))
 
 ;;;###autoload
@@ -451,7 +477,7 @@ written with any one of them.  An empty seed shows every word up
 to `heisig-gt-words-max-rank'.
 
 Interactively, reads the seed; from the kanji list,
-\\[heisig-gt-list-words] seeds it with the kanji at point."
+\\[heisig-gt-kanji-words] seeds it with the kanji at point."
   (interactive (list (read-string "Seed with (empty for all): ")))
   (let ((buf (get-buffer-create heisig-gt-words-buffer-name))
         (seed (mapcar #'char-to-string
@@ -462,8 +488,8 @@ Interactively, reads the seed; from the kanji list,
       (unless (derived-mode-p 'heisig-gt-words-mode)
         (heisig-gt-words-mode))
       (setq heisig-gt-words--seed seed)
-      (heisig-gt-list--reload)
-      (heisig-gt-list--redraw-preserving-point))
+      (heisig-gt-kanji--reload)
+      (heisig-gt-kanji--redraw-preserving-point))
     (pop-to-buffer-same-window buf)))
 
 ;;;###autoload
@@ -471,13 +497,13 @@ Interactively, reads the seed; from the kanji list,
   "Restore the word list view stored in BOOKMARK."
   (heisig-gt-words (bookmark-prop-get bookmark 'seed))
   (with-current-buffer heisig-gt-words-buffer-name
-    (setq heisig-gt-list--columns
+    (setq heisig-gt-kanji--columns
           (or (bookmark-prop-get bookmark 'columns) heisig-gt-words-columns))
-    (setq heisig-gt-list--filters (bookmark-prop-get bookmark 'filters))
+    (setq heisig-gt-kanji--filters (bookmark-prop-get bookmark 'filters))
     (setq tabulated-list-sort-key
-          (heisig-gt-list--valid-sort-key
+          (heisig-gt-kanji--valid-sort-key
            (bookmark-prop-get bookmark 'sort-key)))
-    (heisig-gt-list--redraw-preserving-point)))
+    (heisig-gt-kanji--redraw-preserving-point)))
 
 (provide 'heisig-gt-words)
 

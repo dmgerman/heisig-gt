@@ -136,6 +136,19 @@ none."
 
 ;;;; Frame stepping
 
+(ert-deftest heisig-gt-detail-test-keys ()
+  "The detail buffer spells its keys as the two lists do.
+`k' reaches the kanji list from the word list as well, and `l'
+stays bound to it for the reader who already has that one."
+  (should (eq (keymap-lookup heisig-gt-detail-mode-map "w")
+              'heisig-gt-detail-words))
+  (should (eq (keymap-lookup heisig-gt-detail-mode-map "M-w")
+              'heisig-gt-detail-copy-char))
+  (should (eq (keymap-lookup heisig-gt-detail-mode-map "k")
+              'heisig-gt-detail-back-to-list))
+  (should (eq (keymap-lookup heisig-gt-detail-mode-map "l")
+              'heisig-gt-detail-back-to-list)))
+
 (ert-deftest heisig-gt-detail-test-stepping-stops-at-the-ends ()
   "There is no frame before the first one."
   (heisig-gt-detail-test-with-buffer "一"

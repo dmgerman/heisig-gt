@@ -20,15 +20,15 @@ buffer per kanji. It reads two SQLite databases and writes neither.
 | `heisig-gt.el` | `defgroup`, `Package-Requires`, requires the other three |
 | `heisig-gt-db.el` | Both databases: schema access, bulk tables, the Anki study overlay, the status vocabulary and its faces |
 | `heisig-gt-detail.el` | `heisig-gt-detail-show`: one reusable `*Kanji Detail*` buffer, component buttons, the HTML-fragment renderer |
-| `heisig-gt-list.el` | `heisig-gt-list`: the `*Kanji*` buffer — **and the generic base mode**: rendering, filter algebra, sorting, columns, bookmarks, state. A derived mode supplies registries and a loader via the `heisig-gt-list--*-registry` / `--reload-function` / `--id-function` buffer-locals |
-| `heisig-gt-words.el` | `heisig-gt-words`: the `*Words*` buffer, derived from `heisig-gt-list-mode` |
+| `heisig-gt-kanji.el` | `heisig-gt-kanji`: the `*Kanji*` buffer — **and the generic base mode**: rendering, filter algebra, sorting, columns, bookmarks, state. A derived mode supplies registries and a loader via the `heisig-gt-kanji--*-registry` / `--reload-function` / `--id-function` buffer-locals |
+| `heisig-gt-words.el` | `heisig-gt-words`: the `*Words*` buffer, derived from `heisig-gt-kanji-mode` |
 | `tools/build-heisig-db.py` | Merges Anki + `kanji-all.json` into `heisig-gt.db` |
 | `tools/make-test-fixture.py` | Writes the miniature Anki collection the suite reads |
 | `test/` | ERT suite (71 tests) + `heisig-gt-test-helper.el` |
 
-Load order (`EL_FILES`): db → detail → list → heisig-gt. `heisig-gt-list.el`
+Load order (`EL_FILES`): db → detail → list → heisig-gt. `heisig-gt-kanji.el`
 requires `heisig-gt-detail.el`; detail reaches back to the list only through
-the autoload of `heisig-gt-list`, which is what keeps the two from requiring
+the autoload of `heisig-gt-kanji`, which is what keeps the two from requiring
 each other.
 
 The `defgroup` lives in `heisig-gt.el` and is defined *before* it requires
@@ -38,8 +38,8 @@ requiring it back.
 ## Architecture in one paragraph
 
 Columns and filters are each a plain alist registry
-(`heisig-gt-list-column-alist`, `heisig-gt-list-filter-alist`), copied in
-shape from `org-roam-gt-list.el`. `heisig-gt-list-columns` selects a subset
+(`heisig-gt-kanji-column-alist`, `heisig-gt-kanji-filter-alist`), copied in
+shape from `org-roam-gt-list.el`. `heisig-gt-kanji-columns` selects a subset
 of the column registry *and* its left-to-right order, so showing, hiding and
 reordering are one mechanism rather than three. Records are plists, not
 structs, so a column's `:value` function and the database column it reads
@@ -101,10 +101,20 @@ command of the mode and is otherwise invisible to state persistence.
   on every redraw of a 2000-row list. It is IME spelling, not Hepburn
   (`jou`, not `jō`), and drops the okurigana dot, because its purpose is to
   be typed at a filter prompt.
+- **The base mode is named for the kanji list, because it is the kanji
+  list.** `heisig-gt-kanji.el` holds both the kanji buffer and the generic
+  machinery a derived mode reuses; `heisig-gt-words-mode` derives from
+  `heisig-gt-kanji-mode`. If a third list ever arrives, that is the point
+  to split `heisig-gt-kanji.el` into a `heisig-gt-tabulated.el` base plus
+  a kanji-specific file — not before.
+- **`heisig-gt-list*` was the old name.** Two autoloaded obsolete aliases
+  remain; the bookmark-handler one is load-bearing, since a bookmark
+  stores the handler symbol and one saved before the rename names the old
+  one.
 - **There is one list mode, not two.** `heisig-gt-words-mode` derives from
-  `heisig-gt-list-mode` and overrides seven buffer-locals. Do not copy the
+  `heisig-gt-kanji-mode` and overrides seven buffer-locals. Do not copy the
   machinery for a third list; add the parameter instead.
-- **The saved-view file holds one entry per mode.** `heisig-gt-list--state`
+- **The saved-view file holds one entry per mode.** `heisig-gt-kanji--state`
   is an alist keyed by `major-mode`; the two lists have different columns
   and would otherwise clobber each other.
 - **`make test` does not depend on `make compile`.** A stale `.elc` will be

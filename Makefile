@@ -12,7 +12,7 @@ PACKAGE = heisig-gt
 # compiled in isolation.
 EL_FILES = heisig-gt-db.el \
            heisig-gt-detail.el \
-           heisig-gt-list.el \
+           heisig-gt-kanji.el \
            heisig-gt-words.el \
            heisig-gt.el
 

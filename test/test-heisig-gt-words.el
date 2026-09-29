@@ -18,24 +18,24 @@
   (declare (indent 1) (debug t))
   `(heisig-gt-test-with-db
      (let ((buffer (generate-new-buffer " *heisig-gt-test-words*"))
-           (heisig-gt-list-persist-state nil)
-           (heisig-gt-list--state nil)
-           (heisig-gt-list--state-loaded t))
+           (heisig-gt-kanji-persist-state nil)
+           (heisig-gt-kanji--state nil)
+           (heisig-gt-kanji--state-loaded t))
        (unwind-protect
            (with-current-buffer buffer
              (heisig-gt-words-mode)
              (setq heisig-gt-words--seed ,seed)
-             (heisig-gt-list--reload)
-             (heisig-gt-list--redraw-preserving-point)
+             (heisig-gt-kanji--reload)
+             (heisig-gt-kanji--redraw-preserving-point)
              ,@body)
          (kill-buffer buffer)))))
 
 (defun heisig-gt-words-test-apply (key values &optional negate)
   "Apply the filter KEY over VALUES, optionally NEGATE it, and redraw."
-  (setq heisig-gt-list--filters
+  (setq heisig-gt-kanji--filters
         (list (list :key key :values values :negate negate)))
-  (heisig-gt-list--redraw-preserving-point)
-  heisig-gt-list--shown)
+  (heisig-gt-kanji--redraw-preserving-point)
+  heisig-gt-kanji--shown)
 
 (defun heisig-gt-words-test-roots ()
   "Return the headword of every row now displayed, in order."
@@ -159,7 +159,7 @@ the imported words cover everything said."
 (ert-deftest heisig-gt-words-test-no-seed-loads-everything ()
   "An empty seed is the whole list, up to the cut-off."
   (heisig-gt-words-test-with-buffer nil
-    (should (= heisig-gt-list--total 8))))
+    (should (= heisig-gt-kanji--total 8))))
 
 (ert-deftest heisig-gt-words-test-max-rank-limits-the-load ()
   "The cut-off is applied when loading, not when drawing."
@@ -171,9 +171,9 @@ the imported words cover everything said."
 (ert-deftest heisig-gt-words-test-scope-is-named-in-the-mode-line ()
   "The mode line says what was loaded before saying what was filtered."
   (heisig-gt-words-test-with-buffer '("目")
-    (should (string-match-p "\\[目\\]" (heisig-gt-list--mode-line))))
+    (should (string-match-p "\\[目\\]" (heisig-gt-kanji--mode-line))))
   (heisig-gt-words-test-with-buffer nil
-    (should (string-match-p "top" (heisig-gt-list--mode-line)))))
+    (should (string-match-p "top" (heisig-gt-kanji--mode-line)))))
 
 ;;;; Narrowing
 
@@ -219,10 +219,10 @@ the imported words cover everything said."
 (ert-deftest heisig-gt-words-test-filters-compose-with-the-seed ()
   "Seed, then narrow twice: each step is an AND over the last."
   (heisig-gt-words-test-with-buffer '("目")
-    (setq heisig-gt-list--filters
+    (setq heisig-gt-kanji--filters
           (list (list :key 'by-pos :values '("n") :negate nil)
                 (list :key 'by-jlpt :values '(4) :negate nil)))
-    (heisig-gt-list--redraw-preserving-point)
+    (heisig-gt-kanji--redraw-preserving-point)
     (should (equal (heisig-gt-words-test-roots) '("目的")))))
 
 ;;;; Mode plumbing
@@ -230,26 +230,91 @@ the imported words cover everything said."
 (ert-deftest heisig-gt-words-test-has-its-own-registries ()
   "The mode supplies its own columns and filters, not the kanji ones."
   (heisig-gt-words-test-with-buffer nil
-    (should (eq (heisig-gt-list--registry) heisig-gt-words-column-alist))
-    (should (eq (heisig-gt-list--filters-registry)
+    (should (eq (heisig-gt-kanji--registry) heisig-gt-words-column-alist))
+    (should (eq (heisig-gt-kanji--filters-registry)
                 heisig-gt-words-filter-alist))
     ;; A kanji column is not a word column.
-    (should-error (heisig-gt-list--column 'heisig) :type 'user-error)))
+    (should-error (heisig-gt-kanji--column 'heisig) :type 'user-error)))
 
 (ert-deftest heisig-gt-words-test-rows-are-found-by-rank ()
   "Records are rebuilt on every read, so rank is what point follows."
   (heisig-gt-words-test-with-buffer nil
     (goto-char (point-min))
     (forward-line 3)
-    (let ((id (heisig-gt-list--id-at-point)))
+    (let ((id (heisig-gt-kanji--id-at-point)))
       (should (equal id 4))
-      (heisig-gt-list--revert)
-      (should (equal (heisig-gt-list--id-at-point) id)))))
+      (heisig-gt-kanji--revert)
+      (should (equal (heisig-gt-kanji--id-at-point) id)))))
+
+(ert-deftest heisig-gt-words-test-kanji-list-goes-to-the-row ()
+  "`K' opens the kanji list with point on the chosen character."
+  (heisig-gt-words-test-with-buffer '("川")
+    (goto-char (point-min))
+    (should (equal (plist-get (tabulated-list-get-id) :root) "川"))
+    (unwind-protect
+        (progn
+          (heisig-gt-words-kanji-list)
+          (with-current-buffer heisig-gt-kanji-buffer-name
+            (should (derived-mode-p 'heisig-gt-kanji-mode))
+            (should (equal (heisig-gt-kanji--id-at-point) "川"))))
+      (when (get-buffer heisig-gt-kanji-buffer-name)
+        (kill-buffer heisig-gt-kanji-buffer-name)))))
+
+(ert-deftest heisig-gt-words-test-read-kanji-offers-only-known-ones ()
+  "The choice is between the characters that have an entry.
+A word can be written with a character the kanji database has
+nothing to say about; offering it would be offering a dead end."
+  (heisig-gt-words-test-with-buffer '("川")
+    (goto-char (point-min))
+    ;; 川 is the only kanji, and it is known: no prompt.
+    (should (equal (heisig-gt-words--read-kanji "x") "川")))
+  (heisig-gt-words-test-with-buffer '("目")
+    (goto-char (point-min))
+    (should-not (heisig-gt-db-known-p "目"))
+    (should-error (heisig-gt-words--read-kanji "x") :type 'user-error)))
+
+(ert-deftest heisig-gt-words-test-keys ()
+  "`k' reaches the kanji, and `w' does not reach a broken command.
+`w' opens the word list throughout the package; inherited into a
+word buffer it would call a command that reads a kanji from the
+row, and a word row has none."
+  (heisig-gt-words-test-with-buffer nil
+    (should (eq (keymap-lookup heisig-gt-words-mode-map "k")
+                'heisig-gt-words-show-kanji))
+    (should (eq (keymap-lookup heisig-gt-words-mode-map "K")
+                'heisig-gt-words-kanji-list))
+    (should (eq (keymap-lookup heisig-gt-words-mode-map "M-w")
+                'heisig-gt-words-copy))
+    (should (eq (keymap-lookup heisig-gt-words-mode-map "w") 'undefined))))
+
+(ert-deftest heisig-gt-words-test-show-kanji-goes-to-the-detail ()
+  "A word with one known kanji goes straight there, with no prompt."
+  (heisig-gt-words-test-with-buffer '("川")
+    (goto-char (point-min))
+    (should (equal (plist-get (tabulated-list-get-id) :root) "川"))
+    (unwind-protect
+        (progn
+          (heisig-gt-words-show-kanji)
+          (with-current-buffer heisig-gt-detail-buffer-name
+            (should (equal heisig-gt-detail--char "川"))))
+      (when (get-buffer heisig-gt-detail-buffer-name)
+        (kill-buffer heisig-gt-detail-buffer-name)))))
+
+(ert-deftest heisig-gt-words-test-show-kanji-needs-a-known-kanji ()
+  "A word written with no kanji the database has says so.
+The two bodies of data do not cover the same characters: the
+vocabulary is built from a subtitle corpus and the kanji from
+Anki decks, so a word can be written with a character that has no
+entry to show."
+  (heisig-gt-words-test-with-buffer '("目")
+    (goto-char (point-min))
+    (should-not (heisig-gt-db-known-p "目"))
+    (should-error (heisig-gt-words-show-kanji) :type 'user-error)))
 
 (ert-deftest heisig-gt-words-test-bookmark-records-the-seed ()
   "A bookmarked word view remembers what it was seeded with."
   (heisig-gt-words-test-with-buffer '("目")
-    (let ((record (heisig-gt-list--make-record)))
+    (let ((record (heisig-gt-kanji--make-record)))
       (should (eq (alist-get 'handler record)
                   'heisig-gt-words-bookmark-jump))
       (should (equal (alist-get 'seed record) '("目"))))))
@@ -257,12 +322,12 @@ the imported words cover everything said."
 (ert-deftest heisig-gt-words-test-saved-views-are-per-mode ()
   "The kanji list and the word list do not overwrite each other."
   (heisig-gt-test-with-db
-    (let ((heisig-gt-list--state nil))
-      (setf (alist-get 'heisig-gt-list-mode heisig-gt-list--state)
+    (let ((heisig-gt-kanji--state nil))
+      (setf (alist-get 'heisig-gt-kanji-mode heisig-gt-kanji--state)
             '(:columns (char)))
-      (setf (alist-get 'heisig-gt-words-mode heisig-gt-list--state)
+      (setf (alist-get 'heisig-gt-words-mode heisig-gt-kanji--state)
             '(:columns (root)))
-      (should (equal (alist-get 'heisig-gt-list-mode heisig-gt-list--state)
+      (should (equal (alist-get 'heisig-gt-kanji-mode heisig-gt-kanji--state)
                      '(:columns (char)))))))
 
 (provide 'test-heisig-gt-words)

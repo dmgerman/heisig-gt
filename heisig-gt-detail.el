@@ -36,7 +36,7 @@
 
 ;;; Code:
 
-;; `heisig-gt-list' is deliberately not required here: it requires
+;; `heisig-gt-kanji' is deliberately not required here: it requires
 ;; this file.  The one command that goes back to it is reached through
 ;; its autoload.
 (require 'button)
@@ -44,7 +44,8 @@
 (require 'seq)
 (require 'subr-x)
 
-(declare-function heisig-gt-list "heisig-gt-list" ())
+(declare-function heisig-gt-kanji "heisig-gt-kanji" (&optional char))
+(declare-function heisig-gt-words "heisig-gt-words" (&optional chars))
 
 ;;;; Faces
 
@@ -375,7 +376,12 @@ kanji is made of."
   :parent special-mode-map
   "n"   #'heisig-gt-detail-next-frame
   "p"   #'heisig-gt-detail-previous-frame
-  "w"   #'heisig-gt-detail-copy-char
+  "w"   #'heisig-gt-detail-words
+  "M-w" #'heisig-gt-detail-copy-char
+  ;; `k' reaches the kanji list from the word list too, so it means
+  ;; the same thing here; `l' is kept for the reader who already has
+  ;; it in their fingers.
+  "k"   #'heisig-gt-detail-back-to-list
   "l"   #'heisig-gt-detail-back-to-list
   "g"   #'revert-buffer)
 
@@ -389,8 +395,9 @@ no entry for is shown dimmed and is not a button.
 
   \\[heisig-gt-detail-next-frame] next Heisig frame
   \\[heisig-gt-detail-previous-frame] previous Heisig frame
+  \\[heisig-gt-detail-words] list the words written with it
+  \\[heisig-gt-detail-back-to-list] go to its row in the kanji list
   \\[heisig-gt-detail-copy-char] copy the character to the kill ring
-  \\[heisig-gt-detail-back-to-list] back to the kanji list
   \\[revert-buffer] redraw
   \\[quit-window] quit
 
@@ -456,10 +463,15 @@ one."
   (interactive nil heisig-gt-detail-mode)
   (heisig-gt-detail--step-frame -1))
 
-(defun heisig-gt-detail-back-to-list ()
-  "Return to the kanji list buffer."
+(defun heisig-gt-detail-words ()
+  "List the words written with the character being shown."
   (interactive nil heisig-gt-detail-mode)
-  (heisig-gt-list))
+  (heisig-gt-words (heisig-gt-detail--require-char)))
+
+(defun heisig-gt-detail-back-to-list ()
+  "Return to the kanji list, on the character being shown."
+  (interactive nil heisig-gt-detail-mode)
+  (heisig-gt-kanji heisig-gt-detail--char))
 
 (provide 'heisig-gt-detail)
 
