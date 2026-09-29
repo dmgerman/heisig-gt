@@ -1,0 +1,23 @@
+[
+ {"id": 1, "kanji": "一", "only": "", "keyword": "one",
+  "topreading": "いち", "toponyomi": "いち", "topkunyomi": "ひと",
+  "miadefinition": [{"term": "一", "altterm": "", "pronunciation": "いち",
+                     "pos": "num", "definition": "one",
+                     "frequency": 78, "starCount": "★★★★★"}],
+  "onyomi": [{"kanji": "一", "rt": "いち", "nwords": 15, "otherreadings": "[]"}],
+  "kunyomi": [{"kanji": "一", "rt": "ひと", "nwords": 2, "otherreadings": "[]"}],
+  "itself": [], "words": [{"root": "一", "furigana": "いち", "rt": "",
+                           "definition": "one", "frequency": 78}],
+  "components": "一:one", "strokes": "1", "radical": "一",
+  "jlptlevel": "5", "koohistory1": "Onedown,2041togo.", "henglish": "one"},
+ {"id": 2, "kanji": "川", "only": "", "keyword": "river",
+  "topreading": "かわ", "toponyomi": "せん", "topkunyomi": "かわ",
+  "miadefinition": [], "onyomi": [], "kunyomi": [], "itself": [],
+  "words": [], "components": "川:river", "strokes": "3", "radical": "川",
+  "jlptlevel": "4", "koohistory1": "Threelinesofwater.", "henglish": "river"},
+ {"id": 3, "kanji": "森", "only": "", "keyword": "forest",
+  "topreading": "もり", "toponyomi": "しん", "topkunyomi": "もり",
+  "miadefinition": [], "onyomi": [], "kunyomi": [], "itself": [],
+  "words": [], "components": "木:tree<br>朩:None", "strokes": "", "radical": "木",
+  "jlptlevel": "", "koohistory1": "", "henglish": "forest,woods"}
+]

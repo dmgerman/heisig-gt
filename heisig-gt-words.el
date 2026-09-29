@@ -1,0 +1,484 @@
+;;; heisig-gt-words.el --- Word list seeded by kanji  -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2026 Daniel M. German
+
+;; Author: Daniel M. German <dmg@turingmachine.org>
+;; Maintainer: Daniel M. German <dmg@turingmachine.org>
+;; Assisted-by: Claude:claude-opus-5
+;; Keywords: languages, i18n
+;; URL: https://github.com/dmgerman/heisig-gt
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; `heisig-gt-words' lists Japanese words, ordered by how often they
+;; occur in Netflix subtitles, seeded by the kanji they are written
+;; with.  From the kanji list, \\[heisig-gt-list-words] seeds it with
+;; the kanji at point.
+;;
+;; The mode derives from `heisig-gt-list-mode' and supplies its own
+;; column and filter registries; everything else -- rendering,
+;; sorting, the filter algebra, bookmarks, saved views -- is that
+;; mode's and behaves identically here.
+;;
+;; The seed is what was loaded; filters narrow it further, either by
+;; more kanji or by pronunciation, which can be typed in romaji.
+
+;;; Code:
+
+(require 'heisig-gt-db)
+(require 'heisig-gt-list)
+(require 'seq)
+(require 'subr-x)
+
+;;;; Customization
+
+(defcustom heisig-gt-words-buffer-name "*Words*"
+  "Name of the buffer `heisig-gt-words' displays."
+  :type 'string
+  :group 'heisig-gt)
+
+(defcustom heisig-gt-words-max-rank 20000
+  "How far down the frequency order the word list reaches.
+
+The database holds every word that resolved to a dictionary
+headword, some 52000 of them, because a fifth of the frequency
+report is not really vocabulary -- stray katakana, initialisms,
+names the tokeniser kept -- and where that junk sits decides what
+any given cut-off actually contains.  Raising this needs no
+rebuild.
+
+For scale: the first 1000 words account for 82% of all words
+spoken, 12000 for 96%, and the whole 52000 for 98%."
+  :type 'integer
+  :group 'heisig-gt)
+
+(defcustom heisig-gt-words-columns
+  '(rank root reading romaji pos jlpt definition)
+  "Columns displayed by `heisig-gt-words', in display order."
+  :type '(repeat symbol)
+  :group 'heisig-gt)
+
+(defcustom heisig-gt-words-default-sort-key '("Rank" . nil)
+  "Initial sort key of a `heisig-gt-words' buffer.
+The default opens the list commonest word first, which is the
+order the frequency report is in."
+  :type '(cons string boolean)
+  :group 'heisig-gt)
+
+;;;; Buffer-local state
+
+(defvar-local heisig-gt-words--seed nil
+  "Characters this buffer was seeded with, or nil for no seed.
+A word is loaded when it is written with any one of them.  Nil
+loads every word up to `heisig-gt-words-max-rank'.")
+
+;;;; Column value functions
+
+(defun heisig-gt-words--text (word field)
+  "Return FIELD of WORD as cell text, empty when it is absent."
+  (let ((value (plist-get word field)))
+    (if value (format "%s" value) "")))
+
+(defun heisig-gt-words--rank (word)
+  "Return the frequency rank of WORD."
+  (heisig-gt-words--text word :rank))
+
+(defun heisig-gt-words--root (word)
+  "Return the dictionary headword of WORD."
+  (heisig-gt-words--text word :root))
+
+(defun heisig-gt-words--surface (word)
+  "Return the spelling the subtitles used for WORD."
+  (heisig-gt-words--text word :surface))
+
+(defun heisig-gt-words--lemma (word)
+  "Return the dictionary form the tokeniser gave WORD."
+  (heisig-gt-words--text word :lemma))
+
+(defun heisig-gt-words--reading (word)
+  "Return the pronunciation of WORD, in kana."
+  (heisig-gt-words--text word :reading))
+
+(defun heisig-gt-words--romaji (word)
+  "Return the pronunciation of WORD, transliterated."
+  (heisig-gt-words--text word :romaji))
+
+(defun heisig-gt-words--pos (word)
+  "Return the part-of-speech tags the dictionary gives WORD."
+  (heisig-gt-words--text word :pos))
+
+(defun heisig-gt-words--unidic-pos (word)
+  "Return the part of speech the tokeniser gave WORD."
+  (heisig-gt-words--text word :unidic-pos))
+
+(defun heisig-gt-words--count (word)
+  "Return how many times WORD occurs in the corpus."
+  (heisig-gt-words--text word :count))
+
+(defun heisig-gt-words--definition (word)
+  "Return the English senses of WORD."
+  (heisig-gt-words--text word :definition))
+
+(defun heisig-gt-words--jlpt (word)
+  "Return the JLPT level of WORD, written as N5 through N3.
+Only those three lists exist, so a word above them is blank
+rather than wrongly marked as hard."
+  (let ((level (plist-get word :jlpt)))
+    (if level (format "N%d" level) "")))
+
+(defun heisig-gt-words--pct (word)
+  "Return how much of all speech WORD accounts for."
+  (let ((pct (plist-get word :pct)))
+    (if pct (format "%.3f" pct) "")))
+
+(defun heisig-gt-words--cum-pct (word)
+  "Return how much of all speech WORD and everything commoner cover."
+  (let ((pct (plist-get word :cum-pct)))
+    (if pct (format "%.1f%%" pct) "")))
+
+;;;; Column registry
+
+(defvar heisig-gt-words-column-alist
+  (list
+   (cons 'rank       (list :name "Rank" :width 6
+                           :value #'heisig-gt-words--rank
+                           :face 'font-lock-constant-face
+                           :sort (heisig-gt-list--number-compare :rank)
+                           :doc "Position in the Netflix frequency order."))
+   (cons 'root       (list :name "Word" :width 14
+                           :value #'heisig-gt-words--root
+                           :face nil :sort t
+                           :doc "Dictionary headword."))
+   (cons 'surface    (list :name "Written" :width 14
+                           :value #'heisig-gt-words--surface
+                           :face nil :sort t
+                           :doc "Spelling the subtitles used most often."))
+   (cons 'lemma      (list :name "Lemma" :width 14
+                           :value #'heisig-gt-words--lemma
+                           :face nil :sort t
+                           :doc "Dictionary form the tokeniser assigned."))
+   (cons 'reading    (list :name "Reading" :width 16
+                           :value #'heisig-gt-words--reading
+                           :face 'font-lock-string-face :sort t
+                           :doc "Pronunciation, in kana."))
+   (cons 'romaji     (list :name "Romaji" :width 18
+                           :value #'heisig-gt-words--romaji
+                           :face 'font-lock-string-face :sort t
+                           :doc "Pronunciation, transliterated."))
+   (cons 'pos        (list :name "Type" :width 14
+                           :value #'heisig-gt-words--pos
+                           :face 'font-lock-type-face :sort t
+                           :doc "Part of speech, as the dictionary tags it."))
+   (cons 'unidic-pos (list :name "UniDic" :width 10
+                           :value #'heisig-gt-words--unidic-pos
+                           :face 'font-lock-type-face :sort t
+                           :doc "Part of speech the tokeniser assigned."))
+   (cons 'jlpt       (list :name "JLPT" :width 4
+                           :value #'heisig-gt-words--jlpt
+                           :face nil
+                           :sort (heisig-gt-list--number-compare :jlpt)
+                           :doc "JLPT level; only N5, N4 and N3 exist."))
+   (cons 'count      (list :name "Count" :width 8
+                           :value #'heisig-gt-words--count
+                           :face nil
+                           :sort (heisig-gt-list--number-compare :count)
+                           :doc "Times the word occurs in the corpus."))
+   (cons 'pct        (list :name "%" :width 6
+                           :value #'heisig-gt-words--pct
+                           :face nil
+                           :sort (heisig-gt-list--number-compare :pct)
+                           :doc "Share of all words spoken."))
+   (cons 'cum-pct    (list :name "Cum" :width 7
+                           :value #'heisig-gt-words--cum-pct
+                           :face 'font-lock-comment-face
+                           :sort (heisig-gt-list--number-compare :cum-pct)
+                           :doc "Share covered by this word and every \
+commoner one."))
+   (cons 'definition (list :name "Definition" :width 60
+                           :value #'heisig-gt-words--definition
+                           :face nil :sort t
+                           :doc "English senses, commonest first.")))
+  "Column registry for the word list buffer.
+Same shape as `heisig-gt-list-column-alist'; see its docstring.")
+
+;;;; Filter registry
+
+(defvar heisig-gt-words-filter-alist nil
+  "Filters offered in a `heisig-gt-words' buffer.
+Same shape as `heisig-gt-list-filter-alist'; see its docstring.")
+
+(defun heisig-gt-words--pos-tags ()
+  "Return every distinct part-of-speech tag in this buffer, sorted.
+The dictionary tags a word with a space-separated set -- `adj-na
+n uk' -- so the tags are offered rather than the sets: there are
+about a hundred of the first and over a thousand of the second."
+  (sort (delete-dups
+         (seq-mapcat (lambda (word)
+                       (split-string (or (plist-get word :pos) "") " " t))
+                     heisig-gt-list--kanji))
+        #'string-lessp))
+
+(defun heisig-gt-words--seed-chars (prompt)
+  "Read one or more characters with PROMPT, returned as a list."
+  (let ((input (read-string prompt)))
+    (mapcar #'char-to-string
+            (seq-remove (lambda (ch) (memq ch '(?\s ?\t ?, ?、)))
+                        (string-to-list input)))))
+
+(add-to-list 'heisig-gt-words-filter-alist
+             (cons 'by-kanji
+                   (list :name "Kanji"
+                         :reader (lambda ()
+                                   (heisig-gt-words--seed-chars
+                                    "Written with (any of): "))
+                         :predicate
+                         (lambda (word char)
+                           (string-search char (or (plist-get word :root)
+                                                   "")))
+                         :doc "Show only words written with one of the \
+chosen characters.")))
+
+(add-to-list 'heisig-gt-words-filter-alist
+             (cons 'by-romaji
+                   ;; A regexp rather than a completion: a word's
+                   ;; reading is nearly unique, so choosing one from a
+                   ;; list would only ever select that word, while
+                   ;; "kou" usefully selects hundreds.
+                   (list :name "Romaji"
+                         :reader (lambda ()
+                                   (list (read-regexp
+                                          "Pronunciation matches (romaji)")))
+                         :predicate
+                         (lambda (word regexp)
+                           (string-match-p regexp
+                                           (or (plist-get word :romaji) "")))
+                         :doc "Show only words whose pronunciation matches \
+a regexp, written in romaji.")))
+
+(add-to-list 'heisig-gt-words-filter-alist
+             (cons 'by-reading
+                   (list :name "Reading"
+                         :reader (lambda ()
+                                   (list (read-regexp
+                                          "Pronunciation matches (kana)")))
+                         :predicate
+                         (lambda (word regexp)
+                           (string-match-p regexp
+                                           (or (plist-get word :reading) "")))
+                         :doc "Show only words whose pronunciation matches \
+a regexp, written in kana.")))
+
+(add-to-list 'heisig-gt-words-filter-alist
+             (cons 'by-pos
+                   (list :name "Type"
+                         :reader (lambda ()
+                                   (completing-read-multiple
+                                    "Parts of speech: "
+                                    (heisig-gt-words--pos-tags) nil t))
+                         :predicate
+                         (lambda (word tag)
+                           (member tag (split-string
+                                        (or (plist-get word :pos) "")
+                                        " " t)))
+                         :doc "Show only words carrying one of the chosen \
+part-of-speech tags.")))
+
+(add-to-list 'heisig-gt-words-filter-alist
+             (cons 'by-jlpt
+                   (list :name "JLPT"
+                         :reader
+                         (lambda ()
+                           (mapcar (lambda (value)
+                                     (if (equal value "none")
+                                         'none
+                                       (string-to-number value)))
+                                   (completing-read-multiple
+                                    "JLPT levels: "
+                                    '("5" "4" "3" "none") nil t)))
+                         :predicate
+                         (lambda (word level)
+                           (if (eq level 'none)
+                               (null (plist-get word :jlpt))
+                             (equal level (plist-get word :jlpt))))
+                         :doc "Show only words at one of the chosen JLPT \
+levels; `none' is those above N3 or unlisted.")))
+
+(add-to-list 'heisig-gt-words-filter-alist
+             (cons 'by-rank
+                   (list :name "Rank"
+                         :reader (lambda ()
+                                   (heisig-gt-list--read-range "Ranks"))
+                         :predicate
+                         (lambda (word spec)
+                           (heisig-gt-list--in-range-p
+                            (plist-get word :rank) spec))
+                         :doc "Show only words in a range of frequency \
+ranks.")))
+
+(add-to-list 'heisig-gt-words-filter-alist
+             (cons 'by-definition-regexp
+                   (list :name "Definition regexp"
+                         :reader (lambda ()
+                                   (list (read-regexp "Definition matches")))
+                         :predicate
+                         (lambda (word regexp)
+                           (string-match-p
+                            regexp (or (plist-get word :definition) "")))
+                         :doc "Show only words whose definition matches a \
+regexp.")))
+
+;;;; Loading
+
+(defun heisig-gt-words--reload ()
+  "Return this buffer's words, honouring the seed and the cut-off."
+  (heisig-gt-db-vocab-list heisig-gt-words--seed heisig-gt-words-max-rank))
+
+(defun heisig-gt-words--scope ()
+  "Return the mode-line description of this buffer's contents."
+  (if heisig-gt-words--seed
+      (format "[%s]" (string-join heisig-gt-words--seed ""))
+    (format "[top %d]" heisig-gt-words-max-rank)))
+
+;;;; Commands
+
+(defun heisig-gt-words--require-word ()
+  "Return the word on the current line, or signal."
+  (or (tabulated-list-get-id) (user-error "No word on this line")))
+
+(defun heisig-gt-words-copy ()
+  "Copy the word at point to the kill ring."
+  (interactive nil heisig-gt-words-mode)
+  (let ((word (plist-get (heisig-gt-words--require-word) :root)))
+    (kill-new word)
+    (message "Copied %s" word)))
+
+(defun heisig-gt-words-show-kanji ()
+  "Show the detail of a kanji the word at point is written with."
+  (interactive nil heisig-gt-words-mode)
+  (let* ((root (plist-get (heisig-gt-words--require-word) :root))
+         (chars (seq-filter (lambda (ch)
+                              (heisig-gt-db-known-p (char-to-string ch)))
+                            (string-to-list root))))
+    (unless chars
+      (user-error "No kanji in %s is in the database" root))
+    (heisig-gt-detail-show
+     (char-to-string
+      (if (cdr chars)
+          (string-to-char (completing-read "Kanji: "
+                                           (mapcar #'char-to-string chars)
+                                           nil t))
+        (car chars))))))
+
+(defun heisig-gt-words-set-seed (chars)
+  "Reload the buffer seeded with CHARS, replacing any present seed.
+An empty answer clears the seed, which loads every word up to
+`heisig-gt-words-max-rank'.  Seeding replaces; to narrow what is
+already here, add a by-kanji filter instead."
+  (interactive (list (heisig-gt-words--seed-chars
+                      "Seed with (empty for all): "))
+               heisig-gt-words-mode)
+  (setq heisig-gt-words--seed chars)
+  (heisig-gt-list--reload)
+  (heisig-gt-list--redraw-preserving-point))
+
+;;;; Mode
+
+(defvar-keymap heisig-gt-words-mode-map
+  :doc "Keymap for `heisig-gt-words-mode'."
+  :parent heisig-gt-list-mode-map
+  "RET" #'heisig-gt-words-show-kanji
+  "TAB" #'heisig-gt-words-show-kanji
+  "w"   #'heisig-gt-words-copy
+  "S"   #'heisig-gt-words-set-seed)
+
+(define-derived-mode heisig-gt-words-mode heisig-gt-list-mode "Heisig-gt-words"
+  "Major mode for the read-only word list buffer.
+
+Each row is one Japanese word, ordered by how often it occurs in
+Netflix subtitles.  Readings, parts of speech and definitions
+come from the dictionary yomikun-gt ships; the JLPT level, where
+there is one, from its N5, N4 and N3 vocabulary lists.
+
+The buffer has a seed -- the characters whose words were loaded
+-- and filters that narrow what the seed brought in.  The mode
+line names the seed first, then the filters, then the counts.
+
+  \\[heisig-gt-words-set-seed] reseed (replaces; empty for every word)
+  \\[heisig-gt-words-show-kanji] show a kanji of the word at point
+  \\[heisig-gt-words-copy] copy the word to the kill ring
+
+Filters are by-kanji, by-romaji, by-reading, by-pos, by-jlpt,
+by-rank, by-definition-regexp, and unfilter.  by-kanji narrows to
+the words also written with a further character, and by-romaji
+searches the pronunciation without needing an input method.
+Everything else -- columns, sorting, bookmarks, saved views --
+works as it does in `heisig-gt-list-mode'.
+
+\\{heisig-gt-words-mode-map}"
+  (setq heisig-gt-list--column-registry heisig-gt-words-column-alist)
+  (setq heisig-gt-list--filter-registry heisig-gt-words-filter-alist)
+  (setq heisig-gt-list--reload-function #'heisig-gt-words--reload)
+  (setq heisig-gt-list--id-function (lambda (word) (plist-get word :rank)))
+  (setq heisig-gt-list--default-columns heisig-gt-words-columns)
+  (setq heisig-gt-list--default-sort-key heisig-gt-words-default-sort-key)
+  (setq heisig-gt-list--bookmark-handler #'heisig-gt-words-bookmark-jump)
+  (setq heisig-gt-list--scope-function #'heisig-gt-words--scope)
+  (setq heisig-gt-list--columns heisig-gt-words-columns)
+  (setq tabulated-list-format (heisig-gt-list--format))
+  (setq tabulated-list-sort-key
+        (heisig-gt-list--valid-sort-key heisig-gt-words-default-sort-key))
+  (tabulated-list-init-header))
+
+;;;###autoload
+(defun heisig-gt-words (&optional chars)
+  "Display the word list, seeded with CHARS.
+CHARS is a string of characters; a word is shown when it is
+written with any one of them.  An empty seed shows every word up
+to `heisig-gt-words-max-rank'.
+
+Interactively, reads the seed; from the kanji list,
+\\[heisig-gt-list-words] seeds it with the kanji at point."
+  (interactive (list (read-string "Seed with (empty for all): ")))
+  (let ((buf (get-buffer-create heisig-gt-words-buffer-name))
+        (seed (mapcar #'char-to-string
+                      (seq-remove (lambda (ch)
+                                    (memq ch '(?\s ?\t ?, ?、)))
+                                  (string-to-list (or chars ""))))))
+    (with-current-buffer buf
+      (unless (derived-mode-p 'heisig-gt-words-mode)
+        (heisig-gt-words-mode))
+      (setq heisig-gt-words--seed seed)
+      (heisig-gt-list--reload)
+      (heisig-gt-list--redraw-preserving-point))
+    (pop-to-buffer-same-window buf)))
+
+;;;###autoload
+(defun heisig-gt-words-bookmark-jump (bookmark)
+  "Restore the word list view stored in BOOKMARK."
+  (heisig-gt-words (bookmark-prop-get bookmark 'seed))
+  (with-current-buffer heisig-gt-words-buffer-name
+    (setq heisig-gt-list--columns
+          (or (bookmark-prop-get bookmark 'columns) heisig-gt-words-columns))
+    (setq heisig-gt-list--filters (bookmark-prop-get bookmark 'filters))
+    (setq tabulated-list-sort-key
+          (heisig-gt-list--valid-sort-key
+           (bookmark-prop-get bookmark 'sort-key)))
+    (heisig-gt-list--redraw-preserving-point)))
+
+(provide 'heisig-gt-words)
+
+;;; heisig-gt-words.el ends here

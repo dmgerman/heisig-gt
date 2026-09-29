@@ -1,0 +1,10 @@
+*~
+*.elc
+.elpa/
+.claude
+ai/*.org
+heisig-gt.db
+test/fixtures/mini-collection.anki2
+test/fixtures/mini-heisig.db
+test/fixtures/mini-dictionary.db
+test/fixtures/mini-tango*.db

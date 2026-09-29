@@ -1,0 +1,363 @@
+#+title: heisig-gt
+#+author: Daniel M. German
+#+texinfo_filename: heisig-gt.info
+#+texinfo_dir_category: Emacs
+#+texinfo_dir_title: heisig-gt: (heisig-gt).
+#+texinfo_dir_desc: Browse kanji by Heisig frame, keyword and components.
+
+* heisig-gt
+
+~heisig-gt~ is a kanji browser for Emacs.  It shows one row per kanji in
+a ~tabulated-list-mode~ buffer — the columns you choose, in the order you
+choose, narrowed by filters that compose — and a detail buffer for any
+one of them holding its readings, its components, the characters it is
+itself a component of, Heisig's story, the mnemonic, the stories other
+learners wrote, its compounds, and its stroke order.
+
+It shows study progress too, read live from Anki: which queue each kanji
+is in, its review interval, how many times it has been reviewed and
+forgotten, and when it is next due.  Nothing is duplicated into a
+progress file of its own, so what you see is what Anki will show you.
+
+Nothing in the package writes anything: not to its own database, not to
+the Anki collection.
+
+* Getting started
+
+** Build the database
+
+The package reads an SQLite database that is not shipped with it — it is
+built from your own data:
+
+#+begin_src sh
+make db
+#+end_src
+
+which merges your Anki collection with ~kanji-all.json~ and writes
+~~/.emacs.d/heisig-gt.db~.  Override any of the three paths:
+
+#+begin_src sh
+make db ANKI_FILE=/path/to/collection.anki2 \
+        JSON_FILE=kanji-all.json \
+        DB_FILE=~/.emacs.d/heisig-gt.db
+#+end_src
+
+Anki may be running: the collection is copied before it is opened.
+
+** Load it
+
+#+begin_src emacs-lisp
+(use-package heisig-gt
+  :load-path "~/.emacs.d/modules/dmg/heisig-gt"
+  :commands (heisig-gt-list heisig-gt-detail-show))
+#+end_src
+
+Then ~M-x heisig-gt-list~.
+
+* The list buffer
+
+Each row is one kanji, or one of Heisig's primitives — the elements such
+as ~[apron]~ that the book names but Unicode does not encode as
+characters of their own.
+
+| Key   | Does                                       |
+|-------+--------------------------------------------|
+| ~RET~ | show the kanji at point in detail          |
+| ~TAB~ | the same, in the other window              |
+| ~w~   | copy the character to the kill ring        |
+| ~/~   | add a filter (~C-u /~ to negate it)        |
+| ~D~   | remove one filter                          |
+| ~c~   | show or hide one column                    |
+| ~C~   | choose the column set and its order        |
+| ~s~   | sort by the next sortable column           |
+| ~V~   | reset the view                             |
+| ~g~   | re-read the database and Anki, then redraw |
+| ~q~   | quit                                       |
+
+** Columns
+
+~heisig-gt-list-columns~ is both the set of columns displayed and their
+left-to-right order, so showing, hiding and reordering are one setting
+rather than three.  Every column lives in ~heisig-gt-list-column-alist~:
+
+#+begin_example
+heisig      Heisig frame number, sixth edition
+char        the character itself
+keyword     Heisig's keyword, or your own where you set one
+kind        kanji or primitive
+strokes     stroke count
+radical     classical radical
+components  what the character is built from
+component-keywords
+            the English names of those components
+onyomi      on readings, in kana
+onyomi-romaji      the same, transliterated
+kunyomi     kun readings, in kana
+kunyomi-romaji     the same, transliterated
+jlpt        JLPT level, N5 through N1
+grade       school grade
+kanken      Kanji Kentei level
+wk          WaniKani level
+freq        newspaper frequency rank
+status      which Anki queue it is in
+ivl         current review interval, in days
+reps        times reviewed
+lapses      times forgotten
+due         next review date
+sources     which sources the row was merged from
+meanings    English meanings
+#+end_example
+
+A value wider than its column is truncated and marked with an ellipsis,
+except in the last column, which takes the rest of the line and is shown
+whole.  Widths are counted in display columns, so a kanji takes two of
+them.
+
+** Filters
+
+Filters compose in two directions.  Several values within one filter
+WIDEN the selection; separate filters NARROW it.  Reading ~5,4~ at the
+JLPT prompt and then filtering by status selects the N5 and N4 kanji
+that are also in the chosen queue.  The same filter can be applied again
+to narrow further, and ~C-u~ negates one.
+
+#+begin_example
+by-jlpt              by-grade             by-kind
+by-status            by-source            by-radical
+by-component         by-component-keyword by-used-in
+by-onyomi            by-kunyomi           by-keyword-regexp
+by-meaning-regexp    by-frame             by-strokes
+by-freq              unfilter
+#+end_example
+
+~by-component~ and ~by-used-in~ walk the primitive graph in either
+direction: the first selects the kanji built from something, the second
+selects what something is built from.  ~by-component-keyword~ is
+~by-component~ from the other side of the ~Comp keywords~ column — it
+takes the English name rather than the character, so 水 and ~water~ reach
+the same 54 rows.  It completes on the 848 names actually in the
+database, so a name nothing carries cannot be chosen by accident.
+
+~by-frame~, ~by-strokes~ and ~by-freq~ take a range written ~FROM,TO~.
+Either side may be left empty for no limit, so ~800,~ is every frame
+from 800 on.  A bare number is an exact match.  The range is stored as
+you typed it, so a bookmarked view keeps its meaning.
+
+The mode line lists the filters in force and the rows they leave, as
+~[jlpt=5,4 !status=suspended] 25/2000~.
+
+** Readings
+
+All four reading columns are on by default: ~onyomi~ and ~kunyomi~ in kana,
+~onyomi-romaji~ and ~kunyomi-romaji~ transliterated beside them.  That is
+a wide default; ~c~ drops whichever pair you do not want.
+
+~by-onyomi~ and ~by-kunyomi~ accept a reading in either script and
+complete on both, so ~kou~ and ~コウ~ select the same rows and neither
+needs an input method.  Typing romaji at the prompt is the reason the
+transliteration is stored at all.
+
+The romaji is written by the builder, not derived as a row is drawn: it
+is the same answer every time, and a list of 2000 kanji would otherwise
+transliterate every reading on every redraw.  It is spelled the way an
+IME expects rather than in strict Hepburn — plain ASCII, no macrons,
+~shi~ rather than ~si~, ~jou~ rather than ~jō~ — because it exists to be
+typed.  The okurigana dot and the prefix and suffix dashes are dropped
+from it, so ~むずか.しい~ is ~muzukashii~; the kana column keeps them.  A
+reading ending in a small tsu becomes ~t~, so ~ハッ~ is ~hat~ and does not
+collapse onto ~ハ~.
+
+** Saving a view
+
+~M-x bookmark-set~ stores the displayed columns, the active filters and
+the sort key.  Jumping to it restores those three and re-reads the data.
+
+Set ~heisig-gt-list-persist-state~ to have the view survive between
+sessions; it is written to ~heisig-gt-list-state-file~.
+
+** Component names
+
+The ~components~ column shows what a character is built from; the
+~component-keywords~ column names those components in English, so 早 reads
+~日十~ in one and ~day, ten~ in the other.
+
+Only the Academy source glosses components, so a third of them carry no
+name of their own.  Where one does not, the component is usually a
+character with a row and a keyword of its own — 丿 is a component of 乏
+and a kanji keyworded ~katana~ — and that keyword names it; failing that,
+the first clause of whatever dictionary gloss was recorded does.  Between
+them these name all but two of the 4221 components in the database.  A
+component nothing names is left out rather than shown as a gap, so the
+names line up with each other rather than with the characters.
+
+Two glosses in ~kanji-all.json~ are the literal text ~None~ — a null that
+something stringified on its way into the file.  The builder treats those,
+and ~null~, ~nan~ and ~undefined~, as absent, so no component is named
+~None~ and no filter offers it.
+
+* The word list
+
+~M-x heisig-gt-words~ lists Japanese words rather than kanji, ordered by
+how often they occur in Netflix subtitles.  From the kanji list, ~W~ opens
+it seeded with the kanji at point.
+
+A word buffer has a *seed* — the characters whose words were loaded — and
+filters that narrow what the seed brought in.  The mode line names the
+seed first, then the filters, then the counts: ~[目] [kanji=的] 1/82~.
+
+| Key   | Does                                        |
+|-------+---------------------------------------------|
+| ~S~   | reseed (replaces the seed; empty = all)     |
+| ~RET~ | show a kanji of the word at point           |
+| ~w~   | copy the word to the kill ring              |
+
+Columns, filtering, sorting, bookmarks and saved views work exactly as
+they do in the kanji list — it is the same mode underneath, with its own
+column and filter registries.  Columns: ~rank~, ~root~, ~surface~,
+~lemma~, ~reading~, ~romaji~, ~pos~, ~unidic-pos~, ~jlpt~, ~count~,
+~pct~, ~cum-pct~, ~definition~.  Filters: ~by-kanji~, ~by-romaji~,
+~by-reading~, ~by-pos~, ~by-jlpt~, ~by-rank~, ~by-definition-regexp~.
+
+Seeding widens and filtering narrows, the same rule the kanji list
+follows: a seed of 目川 loads every word using *either*, and then adding
+a ~by-kanji~ filter for 的 keeps only those using *that as well*.
+
+~by-romaji~ searches the pronunciation without an input method, and is a
+regexp rather than a completion: a word's reading is nearly unique, so
+choosing one from a list would only ever select that word, while ~kou~
+usefully selects hundreds.
+
+** How much to load
+
+~heisig-gt-words-max-rank~ (default 20000) is how far down the order the
+list reaches.
+
+The database holds every word that resolved to a dictionary headword —
+some 52000 — rather than a common few thousand, because a fifth of the
+frequency report is not really vocabulary (stray katakana, initialisms,
+names the tokeniser kept) and where that junk sits decides what any given
+cut-off actually contains.  Raising the ceiling needs no rebuild.
+
+For scale, by rank:
+
+| words  | of all speech |
+|--------+---------------|
+| 1000   | 82%           |
+| 5000   | 93%           |
+| 12000  | 96%           |
+| 20000  | 98%           |
+
+** Where the words come from
+
+The list and its order come from a UniDic-tokenised frequency report over
+Japanese Netflix subtitles.  Readings, parts of speech and definitions
+come from the dictionary ~yomikun-gt~ ships; the JLPT level, where there
+is one, from its N5, N4 and N3 vocabulary lists — those three exist, so a
+word above N3 has no level rather than a guessed one.
+
+Three things the builder does that are worth knowing:
+
+- One word occupies several lines of the report, one per spelling the
+  tokeniser saw: 言う is counted separately as 言う, いう and 言える.
+  They are merged on the headword and reading, summing the counts, so a
+  word ranks by how often it was *said* rather than by how often it was
+  said spelled one particular way.
+- UniDic writes disambiguated lemmas — ~私-代名詞~, ~ママ-mama~ — which no
+  dictionary headword carries.  The bare lemma, the on-screen spelling and
+  the reading are each tried in turn.
+- Every value in that dictionary was written by emacsql, which wraps each
+  one in literal double quotes: ~を~ is stored as ~"を"~.  They are
+  stripped once, at build time.
+
+Cumulative coverage is measured against the whole corpus, not against what
+was imported, so it stops short of 100% by however much the dropped
+entries were worth.
+
+* The detail buffer
+
+~RET~ in the list, or ~M-x heisig-gt-detail-show~, fills one buffer with
+everything the database holds about a single kanji.  One buffer is
+reused, so walking the components leaves one window in place rather than
+a trail of them.
+
+| Key   | Does                                |
+|-------+-------------------------------------|
+| ~RET~ | follow the component at point       |
+| ~n~   | next Heisig frame                   |
+| ~p~   | previous Heisig frame               |
+| ~w~   | copy the character to the kill ring |
+| ~l~   | back to the list                    |
+| ~g~   | redraw                              |
+| ~q~   | quit                                |
+
+Every character shown as a component, or as one of the characters the
+current one is a component of, is a button.  A character the database
+has no entry for is shown dimmed and is not one: the component graph
+reaches outside the decks the database was built from, and a button that
+led nowhere would be worse than none.
+
+* Study progress
+
+Progress is read from the Anki collection on every ~g~, not copied into
+the database when it is built: intervals change daily, and a column
+showing yesterday's would be worse than no column.
+
+~heisig-gt-anki-file~ is the collection, and ~heisig-gt-anki-decks~ the
+decks whose cards describe a kanji.  Subdecks are included, and a card
+in a filtered deck counts towards the deck it came from.  A kanji with
+more than one card is described by the one furthest along.
+
+Anki's queues map onto five statuses: ~new~, ~learning~, ~review~,
+~suspended~ and ~buried~.  ~by-status~ also offers ~none~, for the kanji
+Anki does not have at all.
+
+A collection that is missing, unreadable, or not an Anki database is
+never an error.  The study columns are empty, the mode line says why,
+and everything else works unchanged.
+
+* Where the data comes from
+
+~tools/build-heisig-db.py~ merges three sources, preferring them in this
+order per field:
+
+1. The Anki deck ~jp::kanjiMigaku~, whose notes carry a base64-encoded
+   ~MigakuData~ field.  This is the only source with Heisig frame
+   numbers, Heisig's own stories, the primitive graph, and any keyword
+   you overrode yourself.
+2. The Anki deck ~jp::kanjiAcademy~, which adds component glosses, a
+   mnemonic sentence per kanji, and compound words.
+3. ~kanji-all.json~.
+
+Every row records which of the three it drew on, in the ~sources~
+column and the ~by-source~ filter.  That matters, because the JSON
+source has had every space stripped from its English text: it reads
+~oncemore,again~ where it should read ~once more, again~.  It is used
+only where nothing better exists, and where it was used it says so.
+
+Frequency ranks of 999999 — the sentinel both Anki sources use for
+"unranked" — are stored as unknown rather than as the rarest rank
+there is.
+
+* Development
+
+#+begin_src sh
+make               # byte-compile
+make test          # the ERT suite
+make check         # compile + lint + checkdoc + check-declare + test
+make check-ci      # the same, under every Emacs the CI matrix pins
+make db            # build the kanji database
+#+end_src
+
+The suite reads fixtures it generates: a miniature Anki collection from
+~tools/make-test-fixture.py~, merged with ~test/fixtures/mini-kanji.json~
+by the same builder the user runs.  A schema the reader and the builder
+disagree about therefore fails the tests rather than surfacing later
+against real data.  No test touches your own database or collection.
+
+Run ~make check-ci~ before pushing: ~make check~ runs under whatever
+~emacs~ is on PATH, which cannot prove the package works on the versions
+CI pins.
+
+* License
+
+GPL-3.0-or-later.  See ~LICENSE~.
