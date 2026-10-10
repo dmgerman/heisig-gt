@@ -247,10 +247,15 @@ about a hundred of the first and over a thousand of the second."
                                     "Written with (any of): "))
                          :predicate
                          (lambda (word char)
-                           (string-search char (or (plist-get word :root)
+                           ;; `chars' and not `root': the seed selects
+                           ;; through an index built from `chars', and
+                           ;; reading the headword here instead is how
+                           ;; the two came to disagree about kana.
+                           (string-search char (or (plist-get word :chars)
                                                    "")))
                          :doc "Show only words written with one of the \
-chosen characters.")))
+chosen characters.  Any character counts, not only kanji: メ selects \
+カメラ.")))
 
 (add-to-list 'heisig-gt-words-filter-alist
              (cons 'by-romaji

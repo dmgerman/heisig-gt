@@ -117,10 +117,19 @@ command of the mode and is otherwise invisible to state persistence.
 - **The saved-view file holds one entry per mode.** `heisig-gt-kanji--state`
   is an alist keyed by `major-mode`; the two lists have different columns
   and would otherwise clobber each other.
-- **`make test` does not depend on `make compile`.** A stale `.elc` will be
-  loaded in preference to newer source, which looks like a mass test
-  failure with a confusing message. `make check` and `make check-ci` build
-  first; a bare `make test` after editing may not.
+- **`make test` depends on `compile` in this package's Makefile**, added
+  because a stale `.elc` is loaded in preference to newer source and
+  produces a mass failure whose message points at the fixtures. If you
+  copy this Makefile elsewhere, keep that prerequisite.
+- **Containment -- "the words written with X" -- has one definition.**
+  The builder computes `vocab.chars` per word and indexes that same
+  string into `vocab_char`; the SQL seed reads the index, the `by-kanji`
+  filter reads the field. Both derive from one build-time expression, and
+  `heisig-gt-words-test-seed-and-filter-agree` asserts they agree over
+  every character in the fixture. They diverged once -- the index held
+  only Han characters while the filter searched the headword -- so
+  seeding with メ found 0 words where filtering on it found 107. Nothing
+  textual links the two paths; the test is what links them.
 - **The frequency report's columns 2 and 3 are easy to confuse.** 2 is the
   on-screen spelling, 3 is the pronunciation in katakana. For 目指す all
   three of lemma/spelling/pronunciation read 目指す/目指す/メザス, so the

@@ -64,7 +64,11 @@ db:
 # so a schema the reader and the builder disagree about fails the
 # tests rather than surfacing later against real data.  Both fixtures
 # are generated; only their inputs are committed.
-test: $(FIXTURE_DB)
+# Also on `compile': `make test' loads the .elc in preference to newer
+# source, so an edited file that has not been recompiled produces a
+# mass failure whose message points at the fixtures rather than at the
+# stale build.  Cost is nil -- make will not compile twice in one run.
+test: compile $(FIXTURE_DB)
 
 $(FIXTURE_ANKI): tools/make-test-fixture.py
 	./tools/make-test-fixture.py --out $@ \

@@ -802,12 +802,17 @@ Buffer-scoped commands:
 
 Filters are by-jlpt, by-grade, by-kind, by-status, by-source,
 by-radical, by-component, by-component-keyword, by-used-in,
-by-onyomi, by-kunyomi, by-keyword-regexp, by-meaning-regexp,
-by-frame, by-strokes, by-freq, and unfilter.
+by-onyomi, by-kunyomi, by-onyomi-romaji, by-kunyomi-romaji,
+by-keyword-regexp, by-meaning-regexp, by-frame, by-strokes,
+by-freq, and unfilter.
 
 by-onyomi and by-kunyomi take a reading in either script, and
 complete on both, so \"kou\" and \"コウ\" select the same rows and
-neither needs an input method.
+neither needs an input method.  Their -romaji counterparts take a
+regexp over the transliteration instead, for when the fragment is
+what is known rather than the whole reading: by-onyomi selects
+the kanji read \"kou\", while by-onyomi-romaji with \"^ko\" selects
+every kanji with an on reading starting that way.
 
 by-component selects on the component character, and
 by-component-keyword on its English name, so 水 and \"water\"
@@ -1447,6 +1452,36 @@ readings, spelled either way.")))
                             (plist-get kanji :char) "kun" value))
                          :doc "Show only kanji with one of the chosen kun \
 readings, spelled either way.")))
+
+(add-to-list 'heisig-gt-kanji-filter-alist
+             (cons 'by-onyomi-romaji
+                   ;; A regexp rather than a completion, which is what
+                   ;; `by-onyomi' already offers: naming a reading in
+                   ;; full selects the kanji that have it, while "shou"
+                   ;; or "^ka" selects the ones that merely carry it.
+                   (list :name "On reading regexp"
+                         :reader (lambda ()
+                                   (list (read-regexp
+                                          "On reading matches (romaji)")))
+                         :predicate
+                         (lambda (kanji regexp)
+                           (heisig-gt-db-reading-romaji-matches-p
+                            (plist-get kanji :char) "on" regexp))
+                         :doc "Show only kanji an on reading of which \
+matches a regexp, written in romaji.")))
+
+(add-to-list 'heisig-gt-kanji-filter-alist
+             (cons 'by-kunyomi-romaji
+                   (list :name "Kun reading regexp"
+                         :reader (lambda ()
+                                   (list (read-regexp
+                                          "Kun reading matches (romaji)")))
+                         :predicate
+                         (lambda (kanji regexp)
+                           (heisig-gt-db-reading-romaji-matches-p
+                            (plist-get kanji :char) "kun" regexp))
+                         :doc "Show only kanji a kun reading of which \
+matches a regexp, written in romaji.")))
 
 (add-to-list 'heisig-gt-kanji-filter-alist
              (cons 'by-keyword-regexp

@@ -73,7 +73,7 @@ counts towards the deck it came from, not the filtered one."
 
 ;;;; Connection
 
-(defconst heisig-gt-db-schema-version "3"
+(defconst heisig-gt-db-schema-version "4"
   "Schema `tools/build-heisig-db.py' writes and this file reads.
 Bumped whenever a column is added, so a database built before the
 change is reported as stale rather than failing later with an SQL
@@ -289,6 +289,14 @@ method, and is the reason the romaji is stored at all."
     (append (sort (delete-dups romaji) #'string-lessp)
             (sort (delete-dups kana) #'string-lessp))))
 
+(defun heisig-gt-db-reading-romaji-matches-p (char kind regexp)
+  "Return non-nil when a reading of KIND of CHAR matches REGEXP.
+Matched against the transliteration rather than the kana, so a
+fragment like \"shou\" selects every reading carrying it without
+an input method and without having to name one in full."
+  (seq-some (lambda (romaji) (string-match-p regexp romaji))
+            (heisig-gt-db-readings-romaji char kind)))
+
 (defun heisig-gt-db-reading-matches-p (char kind value)
   "Return non-nil when CHAR has a reading of KIND spelled VALUE.
 VALUE may be kana or romaji; both are compared, so a filter does
@@ -430,13 +438,13 @@ one.  Returns nil at either end, or when HEISIG is nil."
 
 (defconst heisig-gt-db-vocab-fields
   '(:rank :netflix-rank :lemma :surface :root :reading :romaji :pos
-    :unidic-pos :jlpt :definition :count :pct :cum-pct)
+    :unidic-pos :jlpt :definition :chars :count :pct :cum-pct)
   "Fields of a vocabulary record, in the order the query returns them.")
 
 (defconst heisig-gt-db--vocab-select
   (concat "SELECT rank, netflix_rank, lemma, surface, root, reading,"
-          " romaji, pos, unidic_pos, jlpt, definition, count, pct,"
-          " cum_pct FROM vocab")
+          " romaji, pos, unidic_pos, jlpt, definition, chars, count,"
+          " pct, cum_pct FROM vocab")
   "SELECT returning the columns named by `heisig-gt-db-vocab-fields'.")
 
 (defun heisig-gt-db--row-to-vocab (row)
@@ -451,13 +459,20 @@ characters -- the seed of a word list -- and is matched through
 an index rather than by scanning every headword.  LIMIT stops at
 that rank.
 
+The index and the `chars\' field of a record are built from the
+same string by the same builder, so this and the by-kanji filter
+cannot answer the same question differently.  They did once: the
+index held only Han characters while the filter searched the
+whole headword, so seeding with a kana character found nothing
+that filtering on it found.
+
 Widening within CHARS and narrowing across separate filters is
 the same rule the rest of the package follows: a seed of several
 kanji asks for the words that use any of them."
   (let* ((limit (or limit most-positive-fixnum))
          (query (concat heisig-gt-db--vocab-select " WHERE rank <= ?"
                         (when chars
-                          (concat " AND rank IN (SELECT rank FROM vocab_kanji"
+                          (concat " AND rank IN (SELECT rank FROM vocab_char"
                                   " WHERE char IN ("
                                   (string-join
                                    (make-list (length chars) "?") ",")

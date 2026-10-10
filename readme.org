@@ -133,9 +133,10 @@ to narrow further, and ~C-u~ negates one.
 by-jlpt              by-grade             by-kind
 by-status            by-source            by-radical
 by-component         by-component-keyword by-used-in
-by-onyomi            by-kunyomi           by-keyword-regexp
-by-meaning-regexp    by-frame             by-strokes
-by-freq              unfilter
+by-onyomi            by-kunyomi           by-onyomi-romaji
+by-kunyomi-romaji    by-keyword-regexp    by-meaning-regexp
+by-frame             by-strokes           by-freq
+unfilter
 #+end_example
 
 ~by-component~ and ~by-used-in~ walk the primitive graph in either
@@ -164,6 +165,14 @@ a wide default; ~c~ drops whichever pair you do not want.
 complete on both, so ~kou~ and ~コウ~ select the same rows and neither
 needs an input method.  Typing romaji at the prompt is the reason the
 transliteration is stored at all.
+
+~by-onyomi-romaji~ and ~by-kunyomi-romaji~ take a *regexp* over the
+transliteration instead, for when the fragment is what you know rather
+than the whole reading.  ~by-onyomi~ with ~kou~ selects the kanji read
+exactly that; ~by-onyomi-romaji~ with ~^ko~ selects every kanji with an
+on reading beginning that way, and with ~ou$~ every one ending in a long
+o.  The two kinds of reading stay apart either way: an on reading never
+matches a kun filter.
 
 The romaji is written by the builder, not derived as a row is drawn: it
 is the same answer every time, and a list of 2000 kanji would otherwise
@@ -234,6 +243,11 @@ column and filter registries.  Columns: ~rank~, ~root~, ~surface~,
 Seeding widens and filtering narrows, the same rule the kanji list
 follows: a seed of 目川 loads every word using *either*, and then adding
 a ~by-kanji~ filter for 的 keeps only those using *that as well*.
+
+Any character counts, not only kanji — seeding with ~メ~ finds カメラ and
+メール — and the seed and the ~by-kanji~ filter always agree, because
+both read one set of characters computed per word when the database was
+built.
 
 ~by-romaji~ searches the pronunciation without an input method, and is a
 regexp rather than a completion: a word's reading is nearly unique, so

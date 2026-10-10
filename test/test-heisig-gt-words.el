@@ -150,6 +150,57 @@ the imported words cover everything said."
     (should (equal (heisig-gt-words-test-roots)
                    '("目" "目的" "目指す")))))
 
+(ert-deftest heisig-gt-words-test-seed-and-filter-agree ()
+  "The seed and the by-kanji filter must answer the same question.
+
+They are different implementations of one concept -- the seed is
+an indexed SQL join over `vocab_char\', the filter a string
+search over a record field -- and nothing textual links them, so
+the invariant is asserted here over every character the fixture
+holds rather than left to inspection.
+
+It did not hold once: the index carried only Han characters while
+the filter searched the whole headword, so seeding with メ
+returned nothing where filtering on it returned 107 words."
+  (heisig-gt-test-with-db
+    (let* ((all (heisig-gt-db-vocab-list))
+           (chars (seq-uniq
+                   (seq-mapcat (lambda (word)
+                                 (string-to-list (plist-get word :chars)))
+                               all)))
+           (predicate (plist-get (alist-get 'by-kanji
+                                            heisig-gt-words-filter-alist)
+                                 :predicate)))
+      (should (> (length chars) 5))
+      (dolist (ch chars)
+        (let* ((char (char-to-string ch))
+               (ranks (lambda (words)
+                        (mapcar (lambda (w) (plist-get w :rank)) words)))
+               (via-seed (funcall ranks
+                                  (heisig-gt-db-vocab-list (list char))))
+               (via-filter (funcall ranks
+                                    (seq-filter
+                                     (lambda (w) (funcall predicate w char))
+                                     all))))
+          (should (equal via-seed via-filter))
+          ;; Neither may be vacuously empty: a character taken from a
+          ;; word must select at least that word.
+          (should via-seed))))))
+
+(ert-deftest heisig-gt-words-test-seed-accepts-kana ()
+  "A kana character is a legitimate seed, not an empty answer."
+  (heisig-gt-words-test-with-buffer '("う")
+    (should (equal (heisig-gt-words-test-roots) '("言う"))))
+  (heisig-gt-words-test-with-buffer '("る")
+    (should (equal (heisig-gt-words-test-roots) '("為る")))))
+
+(ert-deftest heisig-gt-words-test-chars-is-the-headword ()
+  "A record carries the characters its headword is written with."
+  (heisig-gt-test-with-db
+    (let ((word (seq-find (lambda (w) (equal (plist-get w :root) "目指す"))
+                          (heisig-gt-db-vocab-list))))
+      (should (equal (plist-get word :chars) "目指す")))))
+
 (ert-deftest heisig-gt-words-test-seed-widens ()
   "Several seed characters ask for the words using any of them."
   (heisig-gt-words-test-with-buffer '("目" "川")

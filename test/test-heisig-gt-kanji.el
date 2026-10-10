@@ -207,6 +207,23 @@
     (should (< (seq-position heisig-gt-kanji-columns key)
                (seq-position heisig-gt-kanji-columns 'meanings)))))
 
+(ert-deftest heisig-gt-kanji-test-filter-by-reading-romaji ()
+  "The romaji filters take a fragment, where the others take a reading."
+  (heisig-gt-kanji-test-with-buffer
+    ;; 一 is read イチ; the exact filter needs the whole of it.
+    (should (= 0 (heisig-gt-kanji-test-apply 'by-onyomi '("ich"))))
+    (should (= 1 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("ich"))))
+    (should (= 1 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("^i"))))
+    (should (= 0 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("^z"))))
+    ;; The two kinds stay apart, as they do for the exact filters.
+    (should (= 1 (heisig-gt-kanji-test-apply 'by-kunyomi-romaji '("hi"))))
+    (should (= 0 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("hito"))))
+    ;; However permissive the pattern, a kanji with no reading of
+    ;; that kind cannot match: three of the five have an on reading
+    ;; and two have a kun one.
+    (should (= 3 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("."))))
+    (should (= 2 (heisig-gt-kanji-test-apply 'by-kunyomi-romaji '("."))))))
+
 (ert-deftest heisig-gt-kanji-test-filter-by-reading ()
   "A reading filter takes either script and keeps the kinds apart."
   (heisig-gt-kanji-test-with-buffer

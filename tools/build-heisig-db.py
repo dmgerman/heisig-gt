@@ -129,12 +129,18 @@ CREATE TABLE vocab (
   unidic_pos   TEXT,
   jlpt         INTEGER,
   definition   TEXT,
+  chars        TEXT,
   count        INTEGER,
   pct          REAL,
   cum_pct      REAL
 );
 
-CREATE TABLE vocab_kanji (
+-- One row per distinct character per word, so "the words written with
+-- 目" is an index lookup rather than a LIKE over 52000 headwords.
+-- Every character, not only the Han ones: the elisp filter searches
+-- the headword directly and would otherwise find kana this table
+-- cannot, which is a difference nothing textual would warn about.
+CREATE TABLE vocab_char (
   char TEXT NOT NULL,
   rank INTEGER NOT NULL
 );
@@ -164,11 +170,11 @@ CREATE INDEX idx_vocab_root        ON vocab (root);
 CREATE INDEX idx_vocab_reading     ON vocab (reading);
 CREATE INDEX idx_vocab_romaji      ON vocab (romaji);
 CREATE INDEX idx_vocab_jlpt        ON vocab (jlpt);
-CREATE INDEX idx_vocab_kanji_char  ON vocab_kanji (char);
-CREATE INDEX idx_vocab_kanji_rank  ON vocab_kanji (rank);
+CREATE INDEX idx_vocab_char_char   ON vocab_char (char);
+CREATE INDEX idx_vocab_char_rank   ON vocab_char (rank);
 """
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 
 def is_kanji(s):
@@ -746,6 +752,11 @@ def merge_stories(mig, jsn):
 UNIDIC_DISAMBIGUATOR = "-"
 
 
+def distinct_chars(word):
+    """Return the distinct characters of WORD, in the order written."""
+    return "".join(dict.fromkeys(word))
+
+
 def read_tango(specs):
     """Return a dict mapping a lemma to its JLPT level.
 
@@ -942,6 +953,11 @@ def collect_vocab(netflix_path, dictionary_path, tango_specs=None):
             "unidic_pos": record["unidic_pos"],
             "jlpt": lookup_jlpt(record, levels),
             "definition": definition,
+            # Computed here, once, and the only definition of what a
+            # word "is written with": the row carries it for the elisp
+            # filter and `vocab_char' indexes this same string for the
+            # SQL seed, so the two cannot drift apart.
+            "chars": distinct_chars(root),
             "count": record["count"],
         }
         order.append(key)
@@ -962,7 +978,8 @@ def collect_vocab(netflix_path, dictionary_path, tango_specs=None):
 
 
 VOCAB_COLUMNS = ["rank", "netflix_rank", "lemma", "surface", "root", "reading",
-                 "romaji", "pos", "unidic_pos", "jlpt", "definition", "count",
+                 "romaji", "pos", "unidic_pos", "jlpt", "definition",
+                 "chars", "count",
                  "pct", "cum_pct"]
 
 
@@ -1029,12 +1046,9 @@ def build(migaku, academy, jsondata, vocab, out_path):
         "INSERT INTO vocab (%s) VALUES (%s)"
         % (",".join(VOCAB_COLUMNS), ",".join("?" * len(VOCAB_COLUMNS))),
         [tuple(row[c] for c in VOCAB_COLUMNS) for row in vocab])
-    # One row per kanji per word, so "the words written with 目" is an
-    # index lookup rather than a LIKE over 83000 headwords.
     con.executemany(
-        "INSERT INTO vocab_kanji VALUES (?,?)",
-        [(ch, row["rank"]) for row in vocab
-         for ch in dict.fromkeys(ch for ch in row["root"] if is_kanji(ch))])
+        "INSERT INTO vocab_char VALUES (?,?)",
+        [(ch, row["rank"]) for row in vocab for ch in row["chars"]])
 
     counts = {
         "schema_version": SCHEMA_VERSION,

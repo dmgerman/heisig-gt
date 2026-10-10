@@ -205,9 +205,10 @@ to narrow further, and ‘C-u’ negates one.
      by-jlpt              by-grade             by-kind
      by-status            by-source            by-radical
      by-component         by-component-keyword by-used-in
-     by-onyomi            by-kunyomi           by-keyword-regexp
-     by-meaning-regexp    by-frame             by-strokes
-     by-freq              unfilter
+     by-onyomi            by-kunyomi           by-onyomi-romaji
+     by-kunyomi-romaji    by-keyword-regexp    by-meaning-regexp
+     by-frame             by-strokes           by-freq
+     unfilter
 
    ‘by-component’ and ‘by-used-in’ walk the primitive graph in either
 direction: the first selects the kanji built from something, the second
@@ -239,6 +240,14 @@ That is a wide default; ‘c’ drops whichever pair you do not want.
 complete on both, so ‘kou’ and ‘コウ’ select the same rows and neither
 needs an input method.  Typing romaji at the prompt is the reason the
 transliteration is stored at all.
+
+   ‘by-onyomi-romaji’ and ‘by-kunyomi-romaji’ take a *regexp* over the
+transliteration instead, for when the fragment is what you know rather
+than the whole reading.  ‘by-onyomi’ with ‘kou’ selects the kanji read
+exactly that; ‘by-onyomi-romaji’ with ‘^ko’ selects every kanji with an
+on reading beginning that way, and with ‘ou$’ every one ending in a long
+o.  The two kinds of reading stay apart either way: an on reading never
+matches a kun filter.
 
    The romaji is written by the builder, not derived as a row is drawn:
 it is the same answer every time, and a list of 2000 kanji would
@@ -323,6 +332,11 @@ own column and filter registries.  Columns: ‘rank’, ‘root’, ‘surface�
    Seeding widens and filtering narrows, the same rule the kanji list
 follows: a seed of 目川 loads every word using *either*, and then adding
 a ‘by-kanji’ filter for 的 keeps only those using *that as well*.
+
+   Any character counts, not only kanji — seeding with ‘メ’ finds カメラ
+and メール — and the seed and the ‘by-kanji’ filter always agree,
+because both read one set of characters computed per word when the
+database was built.
 
    ‘by-romaji’ searches the pronunciation without an input method, and
 is a regexp rather than a completion: a word's reading is nearly unique,
@@ -508,17 +522,17 @@ Node: Load it2433
 Node: The kanji list2723
 Node: Columns4063
 Node: Filters5643
-Node: Readings7342
-Node: Saving a view8615
-Node: Component names9048
-Node: The word list10243
-Node: How much to load12336
-Node: Where the words come from13056
-Node: The detail buffer14556
-Node: Study progress15624
-Node: Where the data comes from16636
-Node: Development17816
-Node: License18763
+Node: Readings7382
+Node: Saving a view9136
+Node: Component names9569
+Node: The word list10764
+Node: How much to load13103
+Node: Where the words come from13823
+Node: The detail buffer15323
+Node: Study progress16391
+Node: Where the data comes from17403
+Node: Development18583
+Node: License19530
 
 End Tag Table
 
