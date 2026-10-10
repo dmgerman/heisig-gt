@@ -30,6 +30,34 @@
   "Asking for a column that is not registered is an error."
   (should-error (heisig-gt-kanji--column 'nonesuch) :type 'user-error))
 
+(ert-deftest heisig-gt-kanji-test-field-and-value-columns ()
+  "A column declares either the field it shows or how to compute it."
+  (heisig-gt-test-with-db
+    (let ((kanji (heisig-gt-db-kanji "一")))
+      ;; `:field' -- the plain text of a record field.
+      (should (equal (plist-get (heisig-gt-kanji--column 'keyword) :field)
+                     :keyword))
+      (should (equal (heisig-gt-kanji--cell kanji 'keyword) "one"))
+      ;; `:value' -- a column that computes something.
+      (should (functionp (plist-get (heisig-gt-kanji--column 'jlpt) :value)))
+      (should (equal (heisig-gt-kanji--cell kanji 'jlpt) "N5"))
+      ;; A field the record has no value for is an empty cell, not nil.
+      (should (equal (heisig-gt-kanji--cell (heisig-gt-db-kanji "森")
+                                            'heisig)
+                     "")))))
+
+(ert-deftest heisig-gt-kanji-test-column-declaring-neither-signals ()
+  "A registry entry with neither :field nor :value is a mistake.
+An empty cell would hide it until someone wondered why a column
+was blank."
+  (should-error (heisig-gt-kanji--column-value '(:name "Broken") nil))
+  ;; Every registered column in both lists declares one of them.
+  (dolist (registry (list heisig-gt-kanji-column-alist
+                          heisig-gt-words-column-alist))
+    (dolist (entry registry)
+      (should (or (plist-get (cdr entry) :field)
+                  (plist-get (cdr entry) :value))))))
+
 (ert-deftest heisig-gt-kanji-test-column-width-override ()
   "`heisig-gt-kanji-column-widths' beats the registry."
   (should (= (heisig-gt-kanji--column-width 'keyword) 22))

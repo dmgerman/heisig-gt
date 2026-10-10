@@ -111,6 +111,12 @@ command of the mode and is otherwise invisible to state persistence.
   remain; the bookmark-handler one is load-bearing, since a bookmark
   stores the handler symbol and one saved before the rename names the old
   one.
+- **A column declares `:field` or `:value`, never neither.** `:field` is a
+  record field shown as plain text and covers most columns; `:value` is a
+  function, for a column that computes (a level as N4, a cell with a
+  face, a child-table lookup). Twenty one-line accessors said `:field`
+  before it existed. `heisig-gt-kanji--column-value` errors on an entry
+  declaring neither, rather than drawing a blank cell nobody can explain.
 - **There is one list mode, not two.** `heisig-gt-words-mode` derives from
   `heisig-gt-kanji-mode` and overrides seven buffer-locals. Do not copy the
   machinery for a third list; add the parameter instead.

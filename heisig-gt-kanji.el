@@ -202,66 +202,30 @@ does not read as the whole table.")
 
 ;;;; Column value functions
 ;;
-;; One function per column, each taking a kanji record and returning
-;; the cell's text.  A column with nothing to show returns the empty
-;; string rather than "-": a table of dashes is harder to read past
-;; than a table of gaps.
+;; Only the columns that compute something: a level written as N4, a
+;; cell carrying a face, a value fetched from a child table or from
+;; the Anki data.  A column that merely shows a field of the record
+;; declares `:field' in the registry instead.
+;;
+;; A column with nothing to show gives the empty string rather than
+;; "-": a table of dashes is harder to read past than a table of
+;; gaps.
 
 (defun heisig-gt-kanji--text (value)
   "Return VALUE as cell text, or the empty string when it is nil."
   (if value (format "%s" value) ""))
 
-(defun heisig-gt-kanji--char (kanji)
-  "Return the character of KANJI."
-  (heisig-gt-kanji--text (plist-get kanji :char)))
-
-(defun heisig-gt-kanji--heisig (kanji)
-  "Return the Heisig frame number of KANJI."
-  (heisig-gt-kanji--text (plist-get kanji :heisig6)))
-
 (defun heisig-gt-kanji--keyword (kanji)
   "Return the keyword of KANJI."
   (heisig-gt-kanji--text (plist-get kanji :keyword)))
-
-(defun heisig-gt-kanji--kind (kanji)
-  "Return whether KANJI is a kanji or a Heisig primitive."
-  (heisig-gt-kanji--text (plist-get kanji :kind)))
-
-(defun heisig-gt-kanji--strokes (kanji)
-  "Return the stroke count of KANJI."
-  (heisig-gt-kanji--text (plist-get kanji :strokes)))
-
-(defun heisig-gt-kanji--radical (kanji)
-  "Return the radical of KANJI."
-  (heisig-gt-kanji--text (plist-get kanji :radical)))
 
 (defun heisig-gt-kanji--jlpt (kanji)
   "Return the JLPT level of KANJI, written as N5 through N1."
   (heisig-gt-db-jlpt-string (plist-get kanji :jlpt)))
 
-(defun heisig-gt-kanji--grade (kanji)
-  "Return the school grade KANJI is taught in."
-  (heisig-gt-kanji--text (plist-get kanji :grade)))
-
-(defun heisig-gt-kanji--kanken (kanji)
-  "Return the Kanji Kentei level of KANJI."
-  (heisig-gt-kanji--text (plist-get kanji :kanken)))
-
-(defun heisig-gt-kanji--wk (kanji)
-  "Return the WaniKani level of KANJI."
-  (heisig-gt-kanji--text (plist-get kanji :wk)))
-
-(defun heisig-gt-kanji--freq (kanji)
-  "Return the newspaper frequency rank of KANJI."
-  (heisig-gt-kanji--text (plist-get kanji :freq-rank)))
-
 (defun heisig-gt-kanji--meanings (kanji)
   "Return the English meanings of KANJI."
   (heisig-gt-kanji--text (plist-get kanji :meanings)))
-
-(defun heisig-gt-kanji--sources (kanji)
-  "Return the sources KANJI's data was merged from."
-  (heisig-gt-kanji--text (plist-get kanji :sources)))
 
 (defun heisig-gt-kanji--components (kanji)
   "Return the components of KANJI, run together as they are written."
@@ -380,32 +344,32 @@ of the Anki study record instead of the kanji record."
 (defvar heisig-gt-kanji-column-alist
   (list
    (cons 'heisig     (list :name "Frame" :width 5
-                           :value #'heisig-gt-kanji--heisig
+                           :field :heisig6
                            :face 'font-lock-constant-face
                            :sort (heisig-gt-kanji--number-compare :heisig6)
                            :doc "Heisig frame number, sixth edition."))
    (cons 'char       (list :name "Kanji" :width 5
-                           :value #'heisig-gt-kanji--char
+                           :field :char
                            :face nil :sort t
                            :doc "The character itself."))
    (cons 'keyword    (list :name "Keyword" :width 22
-                           :value #'heisig-gt-kanji--keyword
+                           :field :keyword
                            :face 'font-lock-function-name-face
                            :sort #'heisig-gt-kanji--compare-keyword
                            :doc "Heisig keyword, or your own where you set \
 one."))
    (cons 'kind       (list :name "Kind" :width 9
-                           :value #'heisig-gt-kanji--kind
+                           :field :kind
                            :face nil :sort t
                            :doc "Whether the row is a kanji or a Heisig \
 primitive."))
    (cons 'strokes    (list :name "Str" :width 3
-                           :value #'heisig-gt-kanji--strokes
+                           :field :strokes
                            :face nil
                            :sort (heisig-gt-kanji--number-compare :strokes)
                            :doc "Number of strokes."))
    (cons 'radical    (list :name "Rad" :width 3
-                           :value #'heisig-gt-kanji--radical
+                           :field :radical
                            :face nil :sort t
                            :doc "Classical radical."))
    (cons 'components (list :name "Components" :width 12
@@ -442,22 +406,22 @@ order they are written."))
                            :sort (heisig-gt-kanji--number-compare :jlpt)
                            :doc "JLPT level, N5 (easiest) through N1."))
    (cons 'grade      (list :name "Grade" :width 5
-                           :value #'heisig-gt-kanji--grade
+                           :field :grade
                            :face nil
                            :sort (heisig-gt-kanji--number-compare :grade)
                            :doc "School grade the character is taught in."))
    (cons 'kanken     (list :name "Kanken" :width 6
-                           :value #'heisig-gt-kanji--kanken
+                           :field :kanken
                            :face nil
                            :sort (heisig-gt-kanji--number-compare :kanken)
                            :doc "Kanji Kentei level."))
    (cons 'wk         (list :name "WK" :width 3
-                           :value #'heisig-gt-kanji--wk
+                           :field :wk
                            :face nil
                            :sort (heisig-gt-kanji--number-compare :wk)
                            :doc "WaniKani level."))
    (cons 'freq       (list :name "Freq" :width 5
-                           :value #'heisig-gt-kanji--freq
+                           :field :freq-rank
                            :face nil
                            :sort (heisig-gt-kanji--number-compare :freq-rank)
                            :doc "Frequency rank in newspapers; 1 is the \
@@ -486,12 +450,12 @@ commonest."))
                            :face 'font-lock-comment-face :sort t
                            :doc "Date the character is next due for review."))
    (cons 'sources    (list :name "Sources" :width 20
-                           :value #'heisig-gt-kanji--sources
+                           :field :sources
                            :face 'font-lock-comment-face :sort t
                            :doc "Which sources the row's data was merged \
 from."))
    (cons 'meanings   (list :name "Meanings" :width 45
-                           :value #'heisig-gt-kanji--meanings
+                           :field :meanings
                            :face nil :sort t
                            :doc "English meanings.")))
   "Column registry for the kanji list buffer.
@@ -500,13 +464,14 @@ Registry order is the order a column returns to when it is shown
 again, so `meanings' is last: turning any other column on places
 it before rather than after the widest column in the table.
 
-Each entry is (KEY :name STRING :width INTEGER :value FN :face
-FACE :sort SORT :doc STRING).  The :value function is called with
-one kanji record and returns the cell's display string.  :face is
-applied to the cell, or nil for no face.  :sort is nil for a
-column that cannot be sorted, t to sort by the displayed string,
-or a function called with two elements of
-`tabulated-list-entries'.
+Each entry is (KEY :name STRING :width INTEGER :face FACE :sort
+SORT :doc STRING) plus exactly one of :field or :value.  :field
+names a field of the record and shows its plain text; :value is a
+function of one record returning the cell\'s display string, for a
+column that computes something.  :face is applied to the cell, or
+nil for no face.  :sort is nil for a column that cannot be
+sorted, t to sort by the displayed string, or a function called
+with two elements of `tabulated-list-entries\'.
 
 `heisig-gt-kanji-columns' selects which of these are displayed and
 in what order.")
@@ -538,6 +503,25 @@ so the buffer always has at least one column."
 
 ;;;; Rendering
 
+(defun heisig-gt-kanji--column-value (entry record)
+  "Return the cell text of column ENTRY for RECORD.
+
+A column is declared one of two ways.  `:field\' names a field of
+the record and means its plain text, which is what most columns
+want and what two dozen one-line functions used to say.  `:value\'
+gives a function of one record, for a column that computes
+something -- a level written as N4, a cell that carries a face, a
+value fetched from a child table.
+
+Declaring neither is a mistake in the registry rather than a
+missing value, so it is an error and not an empty cell."
+  (cond ((plist-get entry :value)
+         (funcall (plist-get entry :value) record))
+        ((plist-get entry :field)
+         (heisig-gt-kanji--text (plist-get record (plist-get entry :field))))
+        (t (error "Column %s declares neither :field nor :value"
+                  (plist-get entry :name)))))
+
 (defun heisig-gt-kanji--cell (kanji key &optional expand)
   "Return the display string of column KEY for KANJI.
 A value wider than the column is truncated to it and marked with
@@ -551,7 +535,7 @@ nothing follows it to be pushed out of place, so truncating it
 would discard text for no gain."
   (let* ((entry (heisig-gt-kanji--column key))
          (face (plist-get entry :face))
-         (raw (funcall (plist-get entry :value) kanji))
+         (raw (heisig-gt-kanji--column-value entry kanji))
          (text (if expand
                    raw
                  (truncate-string-to-width

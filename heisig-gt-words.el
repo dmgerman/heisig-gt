@@ -87,51 +87,10 @@ A word is loaded when it is written with any one of them.  Nil
 loads every word up to `heisig-gt-words-max-rank'.")
 
 ;;;; Column value functions
-
-(defun heisig-gt-words--text (word field)
-  "Return FIELD of WORD as cell text, empty when it is absent."
-  (let ((value (plist-get word field)))
-    (if value (format "%s" value) "")))
-
-(defun heisig-gt-words--rank (word)
-  "Return the frequency rank of WORD."
-  (heisig-gt-words--text word :rank))
-
-(defun heisig-gt-words--root (word)
-  "Return the dictionary headword of WORD."
-  (heisig-gt-words--text word :root))
-
-(defun heisig-gt-words--surface (word)
-  "Return the spelling the subtitles used for WORD."
-  (heisig-gt-words--text word :surface))
-
-(defun heisig-gt-words--lemma (word)
-  "Return the dictionary form the tokeniser gave WORD."
-  (heisig-gt-words--text word :lemma))
-
-(defun heisig-gt-words--reading (word)
-  "Return the pronunciation of WORD, in kana."
-  (heisig-gt-words--text word :reading))
-
-(defun heisig-gt-words--romaji (word)
-  "Return the pronunciation of WORD, transliterated."
-  (heisig-gt-words--text word :romaji))
-
-(defun heisig-gt-words--pos (word)
-  "Return the part-of-speech tags the dictionary gives WORD."
-  (heisig-gt-words--text word :pos))
-
-(defun heisig-gt-words--unidic-pos (word)
-  "Return the part of speech the tokeniser gave WORD."
-  (heisig-gt-words--text word :unidic-pos))
-
-(defun heisig-gt-words--count (word)
-  "Return how many times WORD occurs in the corpus."
-  (heisig-gt-words--text word :count))
-
-(defun heisig-gt-words--definition (word)
-  "Return the English senses of WORD."
-  (heisig-gt-words--text word :definition))
+;;
+;; Only the columns that compute something.  A column that merely
+;; shows a field of the record declares `:field' in the registry
+;; instead, which is most of them.
 
 (defun heisig-gt-words--jlpt (word)
   "Return the JLPT level of WORD, written as N5 through N3.
@@ -154,36 +113,36 @@ rather than wrongly marked as hard."
 (defvar heisig-gt-words-column-alist
   (list
    (cons 'rank       (list :name "Rank" :width 6
-                           :value #'heisig-gt-words--rank
+                           :field :rank
                            :face 'font-lock-constant-face
                            :sort (heisig-gt-kanji--number-compare :rank)
                            :doc "Position in the Netflix frequency order."))
    (cons 'root       (list :name "Word" :width 14
-                           :value #'heisig-gt-words--root
+                           :field :root
                            :face nil :sort t
                            :doc "Dictionary headword."))
    (cons 'surface    (list :name "Written" :width 14
-                           :value #'heisig-gt-words--surface
+                           :field :surface
                            :face nil :sort t
                            :doc "Spelling the subtitles used most often."))
    (cons 'lemma      (list :name "Lemma" :width 14
-                           :value #'heisig-gt-words--lemma
+                           :field :lemma
                            :face nil :sort t
                            :doc "Dictionary form the tokeniser assigned."))
    (cons 'reading    (list :name "Reading" :width 16
-                           :value #'heisig-gt-words--reading
+                           :field :reading
                            :face 'font-lock-string-face :sort t
                            :doc "Pronunciation, in kana."))
    (cons 'romaji     (list :name "Romaji" :width 18
-                           :value #'heisig-gt-words--romaji
+                           :field :romaji
                            :face 'font-lock-string-face :sort t
                            :doc "Pronunciation, transliterated."))
    (cons 'pos        (list :name "Type" :width 14
-                           :value #'heisig-gt-words--pos
+                           :field :pos
                            :face 'font-lock-type-face :sort t
                            :doc "Part of speech, as the dictionary tags it."))
    (cons 'unidic-pos (list :name "UniDic" :width 10
-                           :value #'heisig-gt-words--unidic-pos
+                           :field :unidic-pos
                            :face 'font-lock-type-face :sort t
                            :doc "Part of speech the tokeniser assigned."))
    (cons 'jlpt       (list :name "JLPT" :width 4
@@ -192,7 +151,7 @@ rather than wrongly marked as hard."
                            :sort (heisig-gt-kanji--number-compare :jlpt)
                            :doc "JLPT level; only N5, N4 and N3 exist."))
    (cons 'count      (list :name "Count" :width 8
-                           :value #'heisig-gt-words--count
+                           :field :count
                            :face nil
                            :sort (heisig-gt-kanji--number-compare :count)
                            :doc "Times the word occurs in the corpus."))
@@ -208,7 +167,7 @@ rather than wrongly marked as hard."
                            :doc "Share covered by this word and every \
 commoner one."))
    (cons 'definition (list :name "Definition" :width 60
-                           :value #'heisig-gt-words--definition
+                           :field :definition
                            :face nil :sort t
                            :doc "English senses, commonest first.")))
   "Column registry for the word list buffer.

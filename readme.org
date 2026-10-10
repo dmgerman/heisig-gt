@@ -86,7 +86,9 @@ characters of their own.
 
 ~heisig-gt-kanji-columns~ is both the set of columns displayed and their
 left-to-right order, so showing, hiding and reordering are one setting
-rather than three.  Every column lives in ~heisig-gt-kanji-column-alist~:
+rather than three.  Every column lives in ~heisig-gt-kanji-column-alist~, declaring either
+the record field it shows (~:field~) or a function that computes its text
+(~:value~):
 
 #+begin_example
 heisig      Heisig frame number, sixth edition
