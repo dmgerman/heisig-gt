@@ -150,6 +150,20 @@ the imported words cover everything said."
     (should (equal (heisig-gt-words-test-roots)
                    '("目" "目的" "目指す")))))
 
+(ert-deftest heisig-gt-words-test-seed-is-parsed-one-way ()
+  "One parser serves the prompt and the entry point.
+They had a copy each, so the command and the key that reseeds it
+could have come to accept different input."
+  (should (equal (heisig-gt-words--split-seed "目川") '("目" "川")))
+  ;; Separators are accepted and dropped: a reader typing several
+  ;; characters reaches for one of them anyway.
+  (should (equal (heisig-gt-words--split-seed "目, 川") '("目" "川")))
+  (should (equal (heisig-gt-words--split-seed "目、川") '("目" "川")))
+  ;; Nothing is a seed of nothing, which loads every word.
+  (should (null (heisig-gt-words--split-seed "")))
+  (should (null (heisig-gt-words--split-seed nil)))
+  (should (null (heisig-gt-words--split-seed " "))))
+
 (ert-deftest heisig-gt-words-test-seed-and-filter-agree ()
   "The seed and the by-kanji filter must answer the same question.
 
@@ -380,40 +394,37 @@ against both of them here."
       (should (equal (alist-get 'view record) view)))))
 
 (ert-deftest heisig-gt-words-test-view-round-trips-with-its-seed ()
-  "Applying a captured view restores the seed and the rows it loads."
+  "Restoring a captured view brings back the seed and its rows.
+A fresh buffer, since that is the case the state file got wrong:
+it restored into one with no seed and silently showed the whole
+cut-off instead of the one word."
   (heisig-gt-words-test-with-buffer '("川")
     (let ((view (heisig-gt-kanji--view-capture))
           (shown heisig-gt-kanji--shown))
       (should (= shown 1))
-      ;; Clear the seed, as a fresh session would start.
-      (setq heisig-gt-words--seed nil)
-      (heisig-gt-kanji--reload)
-      (heisig-gt-kanji--redraw-preserving-point)
-      (should (> heisig-gt-kanji--shown shown))
-      (heisig-gt-kanji--view-apply view)
-      (heisig-gt-kanji--reload)
-      (heisig-gt-kanji--redraw-preserving-point)
-      (should (equal heisig-gt-words--seed '("川")))
-      (should (= heisig-gt-kanji--shown shown)))))
+      (let ((restored (heisig-gt-test-view-restored
+                       'heisig-gt-words-mode view)))
+        (should (= (plist-get restored :shown) shown))
+        (should (equal (plist-get (plist-get restored :view) :seed)
+                       '("川"))))
+      ;; An unseeded buffer is the thing it must not become.
+      (should (> (plist-get (heisig-gt-test-view-restored
+                             'heisig-gt-words-mode
+                             (list :columns (plist-get view :columns)))
+                            :shown)
+                 shown))))) 
 
 (ert-deftest heisig-gt-words-test-both-stores-restore-alike ()
   "The state file and a bookmark restore the same view identically."
   (heisig-gt-words-test-with-buffer '("川")
     (heisig-gt-words-test-apply 'by-pos '("n"))
-    (let* ((view (heisig-gt-kanji--view-capture))
-           (record (heisig-gt-kanji--make-record))
-           (restore (lambda (v)
-                      (with-temp-buffer
-                        (heisig-gt-words-mode)
-                        (heisig-gt-kanji--view-apply v)
-                        (heisig-gt-kanji--reload)
-                        (heisig-gt-kanji--redraw-preserving-point)
-                        (list heisig-gt-words--seed
-                              heisig-gt-kanji--shown
-                              heisig-gt-kanji--columns)))))
-      (should (equal (funcall restore view)
-                     (funcall restore
-                              (heisig-gt-kanji--view-of-bookmark record)))))))
+    (let ((view (heisig-gt-kanji--view-capture))
+          (record (heisig-gt-kanji--make-record)))
+      (should (equal (heisig-gt-test-view-restored
+                      'heisig-gt-words-mode view)
+                     (heisig-gt-test-view-restored
+                      'heisig-gt-words-mode
+                      (heisig-gt-kanji--view-of-bookmark record)))))))
 
 (ert-deftest heisig-gt-words-test-legacy-seed-bookmark-still-restores ()
   "A word bookmark written before views kept its seed at the top level."

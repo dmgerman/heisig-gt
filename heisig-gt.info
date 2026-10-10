@@ -265,11 +265,14 @@ File: heisig-gt.info,  Node: Saving a view,  Next: Component names,  Prev: Readi
 3.4 Saving a view
 =================
 
-‘M-x bookmark-set’ stores the displayed columns, the active filters and
-the sort key.  Jumping to it restores those three and re-reads the data.
+‘M-x bookmark-set’ stores the view: the displayed columns, the active
+filters, the sort key, and — in a word buffer — its seed.  Jumping to it
+restores them and re-reads the data.
 
    Set ‘heisig-gt-kanji-persist-state’ to have the view survive between
-sessions; it is written to ‘heisig-gt-kanji-state-file’.
+sessions; it is written to ‘heisig-gt-kanji-state-file’, one entry per
+list.  Both stores keep the same view, so a view restored from a file
+and the same view restored from a bookmark are the same view.
 
 
 File: heisig-gt.info,  Node: Component names,  Prev: Saving a view,  Up: The kanji list
@@ -524,15 +527,15 @@ Node: Columns4063
 Node: Filters5643
 Node: Readings7382
 Node: Saving a view9136
-Node: Component names9569
-Node: The word list10764
-Node: How much to load13103
-Node: Where the words come from13823
-Node: The detail buffer15323
-Node: Study progress16391
-Node: Where the data comes from17403
-Node: Development18583
-Node: License19530
+Node: Component names9754
+Node: The word list10949
+Node: How much to load13288
+Node: Where the words come from14008
+Node: The detail buffer15508
+Node: Study progress16576
+Node: Where the data comes from17588
+Node: Development18768
+Node: License19715
 
 End Tag Table
 

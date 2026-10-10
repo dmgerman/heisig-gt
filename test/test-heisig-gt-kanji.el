@@ -452,7 +452,9 @@ keep different amounts of it."
       (should (null (alist-get 'position record))))))
 
 (ert-deftest heisig-gt-kanji-test-view-round-trips ()
-  "Capturing and applying a view leaves the buffer as it was."
+  "Capturing and applying a view leaves the buffer as it was.
+Both in place, over a buffer whose view was reset, and into a
+fresh buffer, which is how a saved view arrives."
   (heisig-gt-kanji-test-with-buffer
     (heisig-gt-kanji-test-apply 'by-kind '("kanji"))
     (heisig-gt-kanji-set-columns '(char keyword))
@@ -465,7 +467,12 @@ keep different amounts of it."
       (heisig-gt-kanji--redraw-preserving-point)
       (should (equal heisig-gt-kanji--columns '(char keyword)))
       (should (equal (car tabulated-list-sort-key) "Keyword"))
-      (should (= heisig-gt-kanji--shown shown)))))
+      (should (= heisig-gt-kanji--shown shown))
+      (let ((restored (heisig-gt-test-view-restored
+                       'heisig-gt-kanji-mode view)))
+        (should (= (plist-get restored :shown) shown))
+        (should (equal (plist-get restored :columns) '(char keyword)))
+        (should (equal (plist-get restored :view) view))))))
 
 (ert-deftest heisig-gt-kanji-test-legacy-bookmark-still-restores ()
   "A record written before a view was one object still jumps.

@@ -231,12 +231,27 @@ about a hundred of the first and over a thousand of the second."
                      heisig-gt-kanji--records))
         #'string-lessp))
 
+(defconst heisig-gt-words-seed-separators '(?\s ?\t ?, ?、)
+  "Characters discarded when a seed is read.
+A seed is a run of characters, so nothing in it separates one
+from the next; these are accepted and dropped because a reader
+typing several will reach for one of them anyway.")
+
+(defun heisig-gt-words--split-seed (string)
+  "Return the seed STRING spells, as a list of one-character strings.
+
+The one place a seed is parsed.  It was two -- the prompt and the
+entry point each had their own copy -- which is a standing
+invitation for the command and the key that reseeds it to accept
+different input."
+  (mapcar #'char-to-string
+          (seq-remove (lambda (ch)
+                        (memq ch heisig-gt-words-seed-separators))
+                      (string-to-list (or string "")))))
+
 (defun heisig-gt-words--seed-chars (prompt)
-  "Read one or more characters with PROMPT, returned as a list."
-  (let ((input (read-string prompt)))
-    (mapcar #'char-to-string
-            (seq-remove (lambda (ch) (memq ch '(?\s ?\t ?, ?、)))
-                        (string-to-list input)))))
+  "Read a seed with PROMPT, returned as a list."
+  (heisig-gt-words--split-seed (read-string prompt)))
 
 (add-to-list 'heisig-gt-words-filter-alist
              (cons 'by-kanji
@@ -491,10 +506,7 @@ Interactively, reads the seed; from the kanji list,
 \\[heisig-gt-kanji-words] seeds it with the kanji at point."
   (interactive (list (read-string "Seed with (empty for all): ")))
   (let ((buf (get-buffer-create heisig-gt-words-buffer-name))
-        (seed (mapcar #'char-to-string
-                      (seq-remove (lambda (ch)
-                                    (memq ch '(?\s ?\t ?, ?、)))
-                                  (string-to-list (or chars ""))))))
+        (seed (heisig-gt-words--split-seed chars)))
     (with-current-buffer buf
       (unless (derived-mode-p 'heisig-gt-words-mode)
         (heisig-gt-words-mode))

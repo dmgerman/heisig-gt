@@ -122,6 +122,16 @@ command of the mode and is otherwise invisible to state persistence.
   one view restored as 74 rows or as 20000. A mode with extra view state
   declares it through `--view-extra-function` / `--view-restore-function`
   rather than by teaching either store about it.
+- **A seed is parsed in one place**, `heisig-gt-words--split-seed`. The
+  prompt reader and the `heisig-gt-words` entry point had a copy each,
+  which is how the command and the key that reseeds it could have come to
+  accept different input.
+- **`heisig-gt-test-view-restored` is the view harness, and there is one
+  of it.** Three tests had their own copy of "apply a view, reload, read
+  back", and they are the regression guard on a verified bug -- a
+  drifting guard on a fixed bug is worse than none. It reports the
+  restored view through `--view-capture`, so it needs no knowledge of
+  what a given mode adds to a view.
 - **One bookmark handler, not one per mode.** The record carries `mode`
   and `heisig-gt-kanji-view-mode-alist` says how to open each; a derived
   mode registers itself there. `heisig-gt-words-bookmark-jump` survives

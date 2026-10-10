@@ -16,6 +16,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'heisig-gt-kanji)
 
 (defconst heisig-gt-test-directory
   (file-name-directory (or load-file-name buffer-file-name))
@@ -54,6 +55,32 @@ what another left behind."
          (heisig-gt-db-close)
          (setq heisig-gt-db--study-table nil)
          (setq heisig-gt-db-study-unavailable nil)))))
+
+(defun heisig-gt-test-view-restored (mode view)
+  "Return what VIEW amounts to once restored into a MODE buffer.
+
+The shown row count, the displayed columns, the sort key, and the
+view the buffer then reports -- which together are everything two
+stores of one view have to agree about.  Reporting the view
+through `heisig-gt-kanji--view-capture\' rather than naming its
+fields keeps this helper ignorant of what any one mode adds to a
+view, so a mode that adds another field is covered without
+touching it.
+
+This is the harness for a verified bug: a word buffer's seed was
+kept by a bookmark and dropped by the state file, and one view
+restored as 74 rows through one path and 20000 through the other.
+It is one function because three copies of it could drift, and a
+drifting guard on a fixed bug is worse than none."
+  (with-temp-buffer
+    (funcall mode)
+    (heisig-gt-kanji--view-apply view)
+    (heisig-gt-kanji--reload)
+    (heisig-gt-kanji--redraw-preserving-point)
+    (list :shown heisig-gt-kanji--shown
+          :columns heisig-gt-kanji--columns
+          :sort-key tabulated-list-sort-key
+          :view (heisig-gt-kanji--view-capture))))
 
 (provide 'heisig-gt-test-helper)
 
