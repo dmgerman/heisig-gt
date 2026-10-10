@@ -186,11 +186,14 @@ collapse onto ~ハ~.
 
 ** Saving a view
 
-~M-x bookmark-set~ stores the displayed columns, the active filters and
-the sort key.  Jumping to it restores those three and re-reads the data.
+~M-x bookmark-set~ stores the view: the displayed columns, the active
+filters, the sort key, and — in a word buffer — its seed.  Jumping to it
+restores them and re-reads the data.
 
 Set ~heisig-gt-kanji-persist-state~ to have the view survive between
-sessions; it is written to ~heisig-gt-kanji-state-file~.
+sessions; it is written to ~heisig-gt-kanji-state-file~, one entry per
+list.  Both stores keep the same view, so a view restored from a file and
+the same view restored from a bookmark are the same view.
 
 ** Component names
 

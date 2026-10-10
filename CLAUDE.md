@@ -114,9 +114,19 @@ command of the mode and is otherwise invisible to state persistence.
 - **There is one list mode, not two.** `heisig-gt-words-mode` derives from
   `heisig-gt-kanji-mode` and overrides seven buffer-locals. Do not copy the
   machinery for a third list; add the parameter instead.
-- **The saved-view file holds one entry per mode.** `heisig-gt-kanji--state`
-  is an alist keyed by `major-mode`; the two lists have different columns
-  and would otherwise clobber each other.
+- **A view is one object, captured and applied in one place.**
+  `heisig-gt-kanji--view-capture` / `--view-apply`, used by both the state
+  file (`heisig-gt-kanji--state`, an alist keyed by `major-mode`) and the
+  bookmark record (under the `view` key). They were separate once and the
+  bookmark kept a word buffer's seed while the state file dropped it, so
+  one view restored as 74 rows or as 20000. A mode with extra view state
+  declares it through `--view-extra-function` / `--view-restore-function`
+  rather than by teaching either store about it.
+- **One bookmark handler, not one per mode.** The record carries `mode`
+  and `heisig-gt-kanji-view-mode-alist` says how to open each; a derived
+  mode registers itself there. `heisig-gt-words-bookmark-jump` survives
+  only because records saved before the unification name it, and it
+  forwards with the mode it implies.
 - **`make test` depends on `compile` in this package's Makefile**, added
   because a stale `.elc` is loaded in preference to newer source and
   produces a mass failure whose message points at the fixtures. If you

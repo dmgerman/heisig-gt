@@ -173,9 +173,6 @@ a redraw; this is what point is re-found by.")
 (defvar-local heisig-gt-kanji--default-sort-key nil
   "Sort key this buffer returns to when the view is reset.")
 
-(defvar-local heisig-gt-kanji--bookmark-handler nil
-  "Function restoring a bookmarked view of this buffer's mode.")
-
 (defvar-local heisig-gt-kanji--scope-function nil
   "Function returning a description of what this buffer is showing.
 Filters narrow what was loaded; a scope is what was loaded at
@@ -692,34 +689,61 @@ same as never having saved one."
               (insert-file-contents heisig-gt-kanji-state-file)
               (read (current-buffer)))))))
 
-(defun heisig-gt-kanji--state-capture ()
-  "Return this buffer's view as a plist."
-  (list :sort-key tabulated-list-sort-key
-        :columns heisig-gt-kanji--columns
-        :filters heisig-gt-kanji--filters))
+;;;; Views
+;;
+;; A view is the part of a buffer worth keeping: the displayed
+;; columns, the filters in force, the sort key, and whatever else the
+;; mode counts as part of what it is showing.  It is captured and
+;; applied in one place because it is *stored* in two -- a state file
+;; and a bookmark -- and those two disagreed: the bookmark kept a word
+;; buffer's seed and the state file did not, so one view restored as
+;; 74 rows through one path and 20000 through the other.  Nothing
+;; textual linked them, which is why the divergence survived.
 
-(defun heisig-gt-kanji--state-for-mode ()
-  "Return the saved view for this buffer's mode, or nil.
+(defvar-local heisig-gt-kanji--view-extra-function nil
+  "Function of no arguments returning this mode's view additions.
+A plist, merged into the view.  Set by a derived mode that counts
+something beyond columns, filters and sorting as part of what the
+buffer shows.")
+
+(defvar-local heisig-gt-kanji--view-restore-function nil
+  "Function applying this mode's view additions.
+Called with the whole view, after the shared fields are applied.")
+
+(defun heisig-gt-kanji--view-capture ()
+  "Return this buffer's view."
+  (append (list :columns heisig-gt-kanji--columns
+                :filters heisig-gt-kanji--filters
+                :sort-key tabulated-list-sort-key)
+          (when heisig-gt-kanji--view-extra-function
+            (funcall heisig-gt-kanji--view-extra-function))))
+
+(defun heisig-gt-kanji--view-apply (view)
+  "Apply VIEW to this buffer.
+A field VIEW does not carry is left alone, so a view saved before
+that field existed restores what it can instead of clearing it."
+  (when view
+    (when-let* ((columns (plist-get view :columns)))
+      (setq heisig-gt-kanji--columns columns))
+    (setq heisig-gt-kanji--filters (plist-get view :filters))
+    (when-let* ((key (plist-get view :sort-key)))
+      (setq tabulated-list-sort-key key))
+    (when heisig-gt-kanji--view-restore-function
+      (funcall heisig-gt-kanji--view-restore-function view))))
+
+(defun heisig-gt-kanji--state-apply ()
+  "Apply the saved view for this buffer's mode, where there is one.
 The file holds one entry per mode: the kanji list and the word
 list have different columns and different filters, and one
 overwriting the other's view would be worse than saving neither."
-  (alist-get major-mode heisig-gt-kanji--state))
-
-(defun heisig-gt-kanji--state-apply ()
-  "Apply the saved view to this buffer, where there is one."
-  (when-let* ((heisig-gt-kanji--state (heisig-gt-kanji--state-for-mode)))
-    (when-let* ((columns (plist-get heisig-gt-kanji--state :columns)))
-      (setq heisig-gt-kanji--columns columns))
-    (setq heisig-gt-kanji--filters
-          (plist-get heisig-gt-kanji--state :filters))
-    (when-let* ((key (plist-get heisig-gt-kanji--state :sort-key)))
-      (setq tabulated-list-sort-key key))))
+  (heisig-gt-kanji--view-apply (alist-get major-mode
+                                          heisig-gt-kanji--state)))
 
 (defun heisig-gt-kanji-save-state ()
   "Write this buffer's view to `heisig-gt-kanji-state-file'."
   (interactive nil heisig-gt-kanji-mode)
   (setf (alist-get major-mode heisig-gt-kanji--state)
-        (heisig-gt-kanji--state-capture))
+        (heisig-gt-kanji--view-capture))
   (with-demoted-errors "heisig-gt-kanji: cannot save state: %S"
     (with-temp-file heisig-gt-kanji-state-file
       (let ((print-level nil)
@@ -1137,27 +1161,58 @@ do not all land on the same default."
 What is stored is the view -- columns, filters, sort key -- and
 not a position: the row a position named may not exist the next
 time the data is read."
-  `((handler . ,(or heisig-gt-kanji--bookmark-handler
-                    #'heisig-gt-kanji-bookmark-jump))
+  `((handler . heisig-gt-kanji-bookmark-jump)
     (defaults . (,(heisig-gt-kanji--bookmark-name)))
-    (seed . ,(bound-and-true-p heisig-gt-words--seed))
-    (columns . ,heisig-gt-kanji--columns)
-    (filters . ,heisig-gt-kanji--filters)
-    (sort-key . ,tabulated-list-sort-key)))
+    (mode . ,major-mode)
+    (view . ,(heisig-gt-kanji--view-capture))))
+
+(defvar heisig-gt-kanji-view-mode-alist nil
+  "Modes a saved view can be restored into.
+
+Each entry is (MODE :open FN :buffer-name-variable SYMBOL), where
+FN takes no arguments and leaves a buffer of that mode in
+existence.  A derived mode registers itself here; the bookmark
+handler is one function for every mode rather than one per mode,
+because what it does does not vary.")
+
+(defun heisig-gt-kanji--view-of-bookmark (bookmark)
+  "Return the view recorded in BOOKMARK.
+Records written before a view was one object kept its fields at
+the top level, seed included; they are read in that shape so
+bookmarks saved then still jump."
+  (or (bookmark-prop-get bookmark 'view)
+      (list :columns (bookmark-prop-get bookmark 'columns)
+            :filters (bookmark-prop-get bookmark 'filters)
+            :sort-key (bookmark-prop-get bookmark 'sort-key)
+            :seed (bookmark-prop-get bookmark 'seed))))
 
 ;;;###autoload
-(defun heisig-gt-kanji-bookmark-jump (bookmark)
-  "Restore the kanji list view stored in BOOKMARK."
-  (heisig-gt-kanji)
-  (with-current-buffer heisig-gt-kanji-buffer-name
-    (setq heisig-gt-kanji--columns
-          (or (bookmark-prop-get bookmark 'columns)
-              heisig-gt-kanji-columns))
-    (setq heisig-gt-kanji--filters (bookmark-prop-get bookmark 'filters))
-    (setq tabulated-list-sort-key
-          (heisig-gt-kanji--valid-sort-key
-           (bookmark-prop-get bookmark 'sort-key)))
-    (heisig-gt-kanji--redraw-preserving-point)))
+(defun heisig-gt-kanji-bookmark-jump (bookmark &optional default-mode)
+  "Restore the view stored in BOOKMARK, in whichever mode saved it.
+
+DEFAULT-MODE is the mode to assume for a record that names none.
+Bookmark handlers are called with one argument, so it is only
+passed by the obsolete per-mode handler a record saved before the
+mode was recorded still names."
+  (let* ((mode (or (bookmark-prop-get bookmark 'mode)
+                   default-mode
+                   'heisig-gt-kanji-mode))
+         (entry (or (alist-get mode heisig-gt-kanji-view-mode-alist)
+                    (user-error "Heisig-gt: cannot restore a %s view" mode)))
+         (view (heisig-gt-kanji--view-of-bookmark bookmark)))
+    (funcall (plist-get entry :open))
+    (with-current-buffer (symbol-value
+                          (plist-get entry :buffer-name-variable))
+      (heisig-gt-kanji--view-apply view)
+      (setq tabulated-list-sort-key
+            (heisig-gt-kanji--valid-sort-key tabulated-list-sort-key))
+      (heisig-gt-kanji--reload)
+      (heisig-gt-kanji--redraw-preserving-point))))
+
+(add-to-list 'heisig-gt-kanji-view-mode-alist
+             (list 'heisig-gt-kanji-mode
+                   :open #'heisig-gt-kanji
+                   :buffer-name-variable 'heisig-gt-kanji-buffer-name))
 
 ;;;; Filter
 

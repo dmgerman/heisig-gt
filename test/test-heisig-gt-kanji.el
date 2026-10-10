@@ -12,6 +12,7 @@
 (require 'cl-lib)
 (require 'ert)
 (require 'heisig-gt-kanji)
+(require 'heisig-gt-words)
 (require 'heisig-gt-test-helper)
 
 (defmacro heisig-gt-kanji-test-with-buffer (&rest body)
@@ -436,17 +437,54 @@
               'heisig-gt-kanji-copy-char)))
 
 (ert-deftest heisig-gt-kanji-test-bookmark-records-the-view ()
-  "A bookmark stores the view, not a position."
+  "A bookmark stores the view, not a position.
+The same view object the state file stores, so the two cannot
+keep different amounts of it."
   (heisig-gt-kanji-test-with-buffer
     (heisig-gt-kanji-test-apply 'by-kind '("kanji"))
     (heisig-gt-kanji-set-columns '(char keyword))
     (let ((record (heisig-gt-kanji--make-record)))
       (should (eq (alist-get 'handler record)
                   'heisig-gt-kanji-bookmark-jump))
-      (should (equal (alist-get 'columns record) '(char keyword)))
-      (should (equal (alist-get 'filters record)
-                     heisig-gt-kanji--filters))
+      (should (eq (alist-get 'mode record) 'heisig-gt-kanji-mode))
+      (should (equal (alist-get 'view record)
+                     (heisig-gt-kanji--view-capture)))
       (should (null (alist-get 'position record))))))
+
+(ert-deftest heisig-gt-kanji-test-view-round-trips ()
+  "Capturing and applying a view leaves the buffer as it was."
+  (heisig-gt-kanji-test-with-buffer
+    (heisig-gt-kanji-test-apply 'by-kind '("kanji"))
+    (heisig-gt-kanji-set-columns '(char keyword))
+    (setq tabulated-list-sort-key '("Keyword" . nil))
+    (let ((view (heisig-gt-kanji--view-capture))
+          (shown heisig-gt-kanji--shown))
+      (heisig-gt-kanji-reset-view)
+      (should-not (equal heisig-gt-kanji--columns '(char keyword)))
+      (heisig-gt-kanji--view-apply view)
+      (heisig-gt-kanji--redraw-preserving-point)
+      (should (equal heisig-gt-kanji--columns '(char keyword)))
+      (should (equal (car tabulated-list-sort-key) "Keyword"))
+      (should (= heisig-gt-kanji--shown shown)))))
+
+(ert-deftest heisig-gt-kanji-test-legacy-bookmark-still-restores ()
+  "A record written before a view was one object still jumps.
+Its fields were at the top level and it named no mode."
+  (heisig-gt-kanji-test-with-buffer
+    (let ((view (heisig-gt-kanji--view-of-bookmark
+                 '("old" (columns char keyword)
+                         (filters)
+                         (sort-key "Keyword" . nil)))))
+      (should (equal (plist-get view :columns) '(char keyword)))
+      (should (equal (car (plist-get view :sort-key)) "Keyword")))))
+
+(ert-deftest heisig-gt-kanji-test-one-handler-for-every-mode ()
+  "Both modes register themselves and share the one handler."
+  (should (alist-get 'heisig-gt-kanji-mode heisig-gt-kanji-view-mode-alist))
+  (should (alist-get 'heisig-gt-words-mode heisig-gt-kanji-view-mode-alist))
+  (should-error (heisig-gt-kanji-bookmark-jump
+                 '("x" (mode . nonesuch-mode)))
+                :type 'user-error))
 
 (provide 'test-heisig-gt-kanji)
 

@@ -362,13 +362,66 @@ entry to show."
     (should-not (heisig-gt-db-known-p "目"))
     (should-error (heisig-gt-words-show-kanji) :type 'user-error)))
 
-(ert-deftest heisig-gt-words-test-bookmark-records-the-seed ()
-  "A bookmarked word view remembers what it was seeded with."
-  (heisig-gt-words-test-with-buffer '("目")
-    (let ((record (heisig-gt-kanji--make-record)))
+(ert-deftest heisig-gt-words-test-seed-is-part-of-the-view ()
+  "The seed travels with the view, so every store keeps it.
+It did not: a bookmark kept the seed and the state file dropped
+it, and the same view restored as 74 rows or as 20000.  Nothing
+textual linked the two paths, so the invariant is asserted
+against both of them here."
+  (heisig-gt-words-test-with-buffer '("川")
+    (let ((view (heisig-gt-kanji--view-capture))
+          (record (heisig-gt-kanji--make-record)))
+      (should (equal (plist-get view :seed) '("川")))
+      ;; One handler, and the record says which mode saved it.
       (should (eq (alist-get 'handler record)
-                  'heisig-gt-words-bookmark-jump))
-      (should (equal (alist-get 'seed record) '("目"))))))
+                  'heisig-gt-kanji-bookmark-jump))
+      (should (eq (alist-get 'mode record) 'heisig-gt-words-mode))
+      ;; Both stores hold the identical object.
+      (should (equal (alist-get 'view record) view)))))
+
+(ert-deftest heisig-gt-words-test-view-round-trips-with-its-seed ()
+  "Applying a captured view restores the seed and the rows it loads."
+  (heisig-gt-words-test-with-buffer '("川")
+    (let ((view (heisig-gt-kanji--view-capture))
+          (shown heisig-gt-kanji--shown))
+      (should (= shown 1))
+      ;; Clear the seed, as a fresh session would start.
+      (setq heisig-gt-words--seed nil)
+      (heisig-gt-kanji--reload)
+      (heisig-gt-kanji--redraw-preserving-point)
+      (should (> heisig-gt-kanji--shown shown))
+      (heisig-gt-kanji--view-apply view)
+      (heisig-gt-kanji--reload)
+      (heisig-gt-kanji--redraw-preserving-point)
+      (should (equal heisig-gt-words--seed '("川")))
+      (should (= heisig-gt-kanji--shown shown)))))
+
+(ert-deftest heisig-gt-words-test-both-stores-restore-alike ()
+  "The state file and a bookmark restore the same view identically."
+  (heisig-gt-words-test-with-buffer '("川")
+    (heisig-gt-words-test-apply 'by-pos '("n"))
+    (let* ((view (heisig-gt-kanji--view-capture))
+           (record (heisig-gt-kanji--make-record))
+           (restore (lambda (v)
+                      (with-temp-buffer
+                        (heisig-gt-words-mode)
+                        (heisig-gt-kanji--view-apply v)
+                        (heisig-gt-kanji--reload)
+                        (heisig-gt-kanji--redraw-preserving-point)
+                        (list heisig-gt-words--seed
+                              heisig-gt-kanji--shown
+                              heisig-gt-kanji--columns)))))
+      (should (equal (funcall restore view)
+                     (funcall restore
+                              (heisig-gt-kanji--view-of-bookmark record)))))))
+
+(ert-deftest heisig-gt-words-test-legacy-seed-bookmark-still-restores ()
+  "A word bookmark written before views kept its seed at the top level."
+  (heisig-gt-test-with-db
+    (let ((view (heisig-gt-kanji--view-of-bookmark
+                 '("old" (seed "川") (columns rank root) (filters)))))
+      (should (equal (plist-get view :seed) '("川")))
+      (should (equal (plist-get view :columns) '(rank root))))))
 
 (ert-deftest heisig-gt-words-test-saved-views-are-per-mode ()
   "The kanji list and the word list do not overwrite each other."

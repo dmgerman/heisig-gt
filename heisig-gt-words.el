@@ -465,7 +465,14 @@ works as it does in `heisig-gt-kanji-mode'.
   (setq heisig-gt-kanji--id-function (lambda (word) (plist-get word :rank)))
   (setq heisig-gt-kanji--default-columns heisig-gt-words-columns)
   (setq heisig-gt-kanji--default-sort-key heisig-gt-words-default-sort-key)
-  (setq heisig-gt-kanji--bookmark-handler #'heisig-gt-words-bookmark-jump)
+  ;; The seed is part of what this buffer is showing, so it is part of
+  ;; its view.  Declaring it here is what makes the state file and a
+  ;; bookmark keep it alike; the state file dropped it before, and a
+  ;; restored view silently became the whole cut-off.
+  (setq heisig-gt-kanji--view-extra-function
+        (lambda () (list :seed heisig-gt-words--seed)))
+  (setq heisig-gt-kanji--view-restore-function
+        (lambda (view) (setq heisig-gt-words--seed (plist-get view :seed))))
   (setq heisig-gt-kanji--scope-function #'heisig-gt-words--scope)
   (setq heisig-gt-kanji--columns heisig-gt-words-columns)
   (setq tabulated-list-format (heisig-gt-kanji--format))
@@ -496,18 +503,22 @@ Interactively, reads the seed; from the kanji list,
       (heisig-gt-kanji--redraw-preserving-point))
     (pop-to-buffer-same-window buf)))
 
+(add-to-list 'heisig-gt-kanji-view-mode-alist
+             (list 'heisig-gt-words-mode
+                   ;; Opened with no seed: the seed travels in the
+                   ;; view, and is applied by the restore function
+                   ;; above before the records are read.
+                   :open (lambda () (heisig-gt-words ""))
+                   :buffer-name-variable 'heisig-gt-words-buffer-name))
+
+;; A bookmark saved before the handlers were one function names this
+;; one, so it has to keep resolving; it forwards, and the mode field
+;; its record lacks is supplied here.
 ;;;###autoload
 (defun heisig-gt-words-bookmark-jump (bookmark)
   "Restore the word list view stored in BOOKMARK."
-  (heisig-gt-words (bookmark-prop-get bookmark 'seed))
-  (with-current-buffer heisig-gt-words-buffer-name
-    (setq heisig-gt-kanji--columns
-          (or (bookmark-prop-get bookmark 'columns) heisig-gt-words-columns))
-    (setq heisig-gt-kanji--filters (bookmark-prop-get bookmark 'filters))
-    (setq tabulated-list-sort-key
-          (heisig-gt-kanji--valid-sort-key
-           (bookmark-prop-get bookmark 'sort-key)))
-    (heisig-gt-kanji--redraw-preserving-point)))
+  (declare (obsolete heisig-gt-kanji-bookmark-jump "0.2"))
+  (heisig-gt-kanji-bookmark-jump bookmark 'heisig-gt-words-mode))
 
 (provide 'heisig-gt-words)
 
