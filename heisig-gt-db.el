@@ -73,7 +73,7 @@ counts towards the deck it came from, not the filtered one."
 
 ;;;; Connection
 
-(defconst heisig-gt-db-schema-version "4"
+(defconst heisig-gt-db-schema-version "5"
   "Schema `tools/build-heisig-db.py' writes and this file reads.
 Bumped whenever a column is added, so a database built before the
 change is reported as stale rather than failing later with an SQL
@@ -671,6 +671,16 @@ that offers to visit a character has to ask first."
   '((t :inherit shadow))
   "Face for a buried kanji."
   :group 'heisig-gt)
+
+(defun heisig-gt-db-jlpt-string (level)
+  "Return LEVEL written as a JLPT level, or the empty string for none.
+
+Shared by the kanji list and the word list rather than spelled
+once in each: they differed once, one of them guarding against a
+level of 0 and the other not, because the database recorded
+\"no level\" as both NULL and 0.  The builder now stores only
+NULL, so one rendering serves both."
+  (if level (format "N%d" level) ""))
 
 (defconst heisig-gt-db-statuses '(new learning review suspended buried)
   "Every status `heisig-gt-db--anki-queue-status' can return.")

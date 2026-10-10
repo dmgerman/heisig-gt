@@ -121,6 +121,15 @@ command of the mode and is otherwise invisible to state persistence.
   because a stale `.elc` is loaded in preference to newer source and
   produces a mass failure whose message points at the fixtures. If you
   copy this Makefile elsewhere, keep that prerequisite.
+- **One concept, one spelling of absent.** `kanji.jlpt` recorded "no
+  level" as both NULL and 0 (114 rows, from the JSON source's `"0"`).
+  That offered `0` at the by-jlpt prompt as though it were a level, and
+  forced `heisig-gt-kanji--jlpt` and `heisig-gt-words--jlpt` to differ --
+  a pair that looked like a mergeable clone but whose asymmetry was
+  load-bearing. `as_jlpt` now admits only 1..5, and both render through
+  `heisig-gt-db-jlpt-string`. The lesson generalises: normalise the
+  representation before merging the code that compensates for it, or the
+  inconsistency gets hard-coded into the shared version.
 - **Containment -- "the words written with X" -- has one definition.**
   The builder computes `vocab.chars` per word and indexes that same
   string into `vocab_char`; the SQL seed reads the index, the `by-kanji`

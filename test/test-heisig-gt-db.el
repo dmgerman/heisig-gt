@@ -10,6 +10,8 @@
 
 (require 'ert)
 (require 'heisig-gt-db)
+(require 'heisig-gt-kanji)
+(require 'heisig-gt-words)
 (require 'heisig-gt-test-helper)
 
 ;;;; Records
@@ -56,10 +58,41 @@
     (let ((forest (heisig-gt-db-kanji "森")))
       (should (equal (plist-get forest :sources) "json"))
       (should (equal (plist-get forest :keyword) "forest"))
-      ;; Its stroke count and JLPT level are the empty strings the
-      ;; source uses for "unknown", and must not become zeroes.
+      ;; Its stroke count is the empty string the source uses for
+      ;; "unknown", and must not become a zero.
       (should (null (plist-get forest :strokes)))
+      ;; Its JLPT level is the literal "0" that source uses for "no
+      ;; level", for 114 kanji.  One column must not carry two
+      ;; spellings of absent: it offered 0 at the by-jlpt prompt as
+      ;; though it were a level, and forced the kanji list and the
+      ;; word list to render the field with different code.
       (should (null (plist-get forest :jlpt))))))
+
+(ert-deftest heisig-gt-db-test-jlpt-has-one-spelling-of-absent ()
+  "No row records a JLPT level outside N5..N1."
+  (heisig-gt-test-with-db
+    (should-not (seq-find (lambda (kanji)
+                            (let ((level (plist-get kanji :jlpt)))
+                              (and level (not (memq level '(1 2 3 4 5))))))
+                          (heisig-gt-db-kanji-list)))
+    (should-not (seq-find (lambda (word)
+                            (let ((level (plist-get word :jlpt)))
+                              (and level (not (memq level '(1 2 3 4 5))))))
+                          (heisig-gt-db-vocab-list)))))
+
+(ert-deftest heisig-gt-db-test-jlpt-renders-the-same-everywhere ()
+  "One rendering serves both lists, so they cannot disagree.
+They did: one guarded against a level of 0 and the other did not."
+  (should (equal (heisig-gt-db-jlpt-string 5) "N5"))
+  (should (equal (heisig-gt-db-jlpt-string 1) "N1"))
+  (should (equal (heisig-gt-db-jlpt-string nil) ""))
+  (heisig-gt-test-with-db
+    (let ((kanji (heisig-gt-db-kanji "一"))
+          (word (seq-find (lambda (w) (equal (plist-get w :root) "だ"))
+                          (heisig-gt-db-vocab-list))))
+      (should (equal (plist-get kanji :jlpt) (plist-get word :jlpt)))
+      (should (equal (heisig-gt-kanji--jlpt kanji)
+                     (heisig-gt-words--jlpt word))))))
 
 (ert-deftest heisig-gt-db-test-primitive-row ()
   "A Heisig primitive gets a row of its own, named by its keyword."

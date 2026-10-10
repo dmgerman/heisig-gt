@@ -174,7 +174,7 @@ CREATE INDEX idx_vocab_char_char   ON vocab_char (char);
 CREATE INDEX idx_vocab_char_rank   ON vocab_char (rank);
 """
 
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 
 
 def is_kanji(s):
@@ -510,6 +510,23 @@ def as_freq(value):
 NULL_TOKENS = frozenset(("none", "null", "nan", "undefined"))
 
 
+JLPT_LEVELS = frozenset((1, 2, 3, 4, 5))
+
+
+def as_jlpt(value):
+    """Return VALUE as a JLPT level, or None when it is not one.
+
+    The levels are N5 (easiest) through N1.  The JSON source spells
+    "no level" as "0" for 114 kanji and as the empty string for two
+    more; one column carrying two spellings of absent is how the kanji
+    and the word list came to need different code to render the same
+    field, and how `0' came to be offered at the by-jlpt prompt as
+    though it were a level.
+    """
+    value = as_int(value)
+    return value if value in JLPT_LEVELS else None
+
+
 def blank_to_none(value):
     """Return None for a string that carries no value, else VALUE.
 
@@ -581,7 +598,8 @@ def merge_kanji(char, mig, aca, jsn):
         "usr_keyword": usr_kw,
         "strokes": first(mig.get("stroke_count"), as_int(jsn.get("strokes"))),
         "grade": mig.get("grade"),
-        "jlpt": first(mig.get("jlpt"), as_int(jsn.get("jlptlevel"))),
+        "jlpt": first(as_jlpt(mig.get("jlpt")),
+                      as_jlpt(jsn.get("jlptlevel"))),
         "kanken": mig.get("kanken"),
         "wk": mig.get("wk"),
         "freq_rank": as_freq(mig.get("frequency_rank")),
@@ -951,7 +969,7 @@ def collect_vocab(netflix_path, dictionary_path, tango_specs=None):
             "romaji": blank_to_none(kana_to_romaji(record["reading"])),
             "pos": pos,
             "unidic_pos": record["unidic_pos"],
-            "jlpt": lookup_jlpt(record, levels),
+            "jlpt": as_jlpt(lookup_jlpt(record, levels)),
             "definition": definition,
             # Computed here, once, and the only definition of what a
             # word "is written with": the row carries it for the elisp

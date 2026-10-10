@@ -109,9 +109,12 @@
       (should (equal (heisig-gt-kanji--cell forest 'strokes) "")))))
 
 (ert-deftest heisig-gt-kanji-test-jlpt-is-written-as-a-level ()
-  "The JLPT column reads N5, not 5."
-  (heisig-gt-test-with-db
-    (should (equal (heisig-gt-kanji--jlpt (heisig-gt-db-kanji "一")) "N5"))))
+  "The JLPT column reads N5, not 5, and offers no 0 to filter on."
+  (heisig-gt-kanji-test-with-buffer
+    (should (equal (heisig-gt-kanji--jlpt (heisig-gt-db-kanji "一")) "N5"))
+    ;; 0 was offered at the prompt and selected 114 kanji whose cell
+    ;; rendered blank, because the column recorded absence two ways.
+    (should-not (memq 0 (heisig-gt-kanji--values-of :jlpt)))))
 
 (ert-deftest heisig-gt-kanji-test-buffer-renders-every-row ()
   "Every kanji in the database gets a row."

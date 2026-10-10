@@ -240,8 +240,7 @@ does not read as the whole table.")
 
 (defun heisig-gt-kanji--jlpt (kanji)
   "Return the JLPT level of KANJI, written as N5 through N1."
-  (let ((level (plist-get kanji :jlpt)))
-    (if (and level (> level 0)) (format "N%d" level) "")))
+  (heisig-gt-db-jlpt-string (plist-get kanji :jlpt)))
 
 (defun heisig-gt-kanji--grade (kanji)
   "Return the school grade KANJI is taught in."

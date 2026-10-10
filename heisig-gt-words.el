@@ -137,8 +137,7 @@ loads every word up to `heisig-gt-words-max-rank'.")
   "Return the JLPT level of WORD, written as N5 through N3.
 Only those three lists exist, so a word above them is blank
 rather than wrongly marked as hard."
-  (let ((level (plist-get word :jlpt)))
-    (if level (format "N%d" level) "")))
+  (heisig-gt-db-jlpt-string (plist-get word :jlpt)))
 
 (defun heisig-gt-words--pct (word)
   "Return how much of all speech WORD accounts for."
