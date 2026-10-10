@@ -126,6 +126,11 @@ command of the mode and is otherwise invisible to state persistence.
   prompt reader and the `heisig-gt-words` entry point had a copy each,
   which is how the command and the key that reseeds it could have come to
   accept different input.
+- **Shared test scaffolding lives in `heisig-gt-test-helper.el`:**
+  `heisig-gt-test-apply-filter`, `heisig-gt-test-with-list-buffer` and
+  `heisig-gt-test-view-restored`. The per-list `*-test-with-buffer` macros
+  are thin wrappers over the second so test bodies did not have to
+  change. Add scaffolding there, not per test file.
 - **`heisig-gt-test-view-restored` is the view harness, and there is one
   of it.** Three tests had their own copy of "apply a view, reload, read
   back", and they are the regression guard on a verified bug -- a

@@ -16,22 +16,9 @@
 (require 'heisig-gt-test-helper)
 
 (defmacro heisig-gt-kanji-test-with-buffer (&rest body)
-  "Run BODY in a fresh list buffer filled from the fixtures."
+  "Run BODY in a fresh kanji list buffer filled from the fixtures."
   (declare (indent 0) (debug t))
-  `(heisig-gt-test-with-db
-     (let ((buffer (generate-new-buffer " *heisig-gt-test-list*"))
-           ;; Persistence is off so a test cannot write the
-           ;; developer's state file.
-           (heisig-gt-kanji-persist-state nil)
-           (heisig-gt-kanji--state nil)
-           (heisig-gt-kanji--state-loaded t))
-       (unwind-protect
-           (with-current-buffer buffer
-             (heisig-gt-kanji-mode)
-             (heisig-gt-kanji--reload)
-             (heisig-gt-kanji--redraw-preserving-point)
-             ,@body)
-         (kill-buffer buffer)))))
+  `(heisig-gt-test-with-list-buffer #'heisig-gt-kanji-mode nil ,@body))
 
 (defun heisig-gt-kanji-test-column (key)
   "Return the cell text of column KEY on the current line."
@@ -127,26 +114,19 @@
 
 ;;;; Filters
 
-(defun heisig-gt-kanji-test-apply (key values &optional negate)
-  "Apply the filter KEY over VALUES, optionally NEGATE it, and redraw."
-  (setq heisig-gt-kanji--filters
-        (list (list :key key :values values :negate negate)))
-  (heisig-gt-kanji--redraw-preserving-point)
-  heisig-gt-kanji--shown)
-
 (ert-deftest heisig-gt-kanji-test-filter-selects ()
   "A filter keeps the rows its predicate accepts."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-kind '("primitive"))))
-    (should (= 4 (heisig-gt-kanji-test-apply 'by-kind '("kanji"))))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-kind '("primitive"))))
+    (should (= 4 (heisig-gt-test-apply-filter 'by-kind '("kanji"))))))
 
 (ert-deftest heisig-gt-kanji-test-filter-values-widen ()
   "Values within one filter are an OR."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-jlpt '(5))))
-    (should (= 2 (heisig-gt-kanji-test-apply 'by-jlpt '(4))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-jlpt '(5))))
+    (should (= 2 (heisig-gt-test-apply-filter 'by-jlpt '(4))))
     ;; The union of the two, not either one.
-    (should (= 3 (heisig-gt-kanji-test-apply 'by-jlpt '(5 4))))))
+    (should (= 3 (heisig-gt-test-apply-filter 'by-jlpt '(5 4))))))
 
 (ert-deftest heisig-gt-kanji-test-filters-narrow ()
   "Separate filters are an AND."
@@ -160,18 +140,18 @@
 (ert-deftest heisig-gt-kanji-test-filter-negation ()
   "A negated filter keeps exactly what it would otherwise drop."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-kind '("primitive"))))
-    (should (= 4 (heisig-gt-kanji-test-apply 'by-kind '("primitive") t)))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-kind '("primitive"))))
+    (should (= 4 (heisig-gt-test-apply-filter 'by-kind '("primitive") t)))))
 
 (ert-deftest heisig-gt-kanji-test-unregistered-filter-narrows-nothing ()
   "A filter left over from a removed registration empties nothing."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 5 (heisig-gt-kanji-test-apply 'by-nonesuch '("x"))))))
+    (should (= 5 (heisig-gt-test-apply-filter 'by-nonesuch '("x"))))))
 
 (ert-deftest heisig-gt-kanji-test-filter-by-component ()
   "The component filter reads the graph, not the character."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-component '("[apron]"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-component '("[apron]"))))
     (goto-char (point-min))
     (should (equal (heisig-gt-kanji--char-at-point) "肉"))))
 
@@ -179,16 +159,16 @@
   "The keyword filter reaches the same rows as the character one."
   (heisig-gt-kanji-test-with-buffer
     ;; 肉 is built from [apron], whose name is "apron".
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-component-keyword
+    (should (= 1 (heisig-gt-test-apply-filter 'by-component-keyword
                                             '("apron"))))
     (goto-char (point-min))
     (should (equal (heisig-gt-kanji--char-at-point) "肉"))
     ;; Either side of the Comp keywords column selects the same row.
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-component '("[apron]"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-component '("[apron]"))))
     ;; Values widen, as in every other filter.
-    (should (= 2 (heisig-gt-kanji-test-apply 'by-component-keyword
+    (should (= 2 (heisig-gt-test-apply-filter 'by-component-keyword
                                             '("apron" "one"))))
-    (should (= 0 (heisig-gt-kanji-test-apply 'by-component-keyword
+    (should (= 0 (heisig-gt-test-apply-filter 'by-component-keyword
                                             '("nonesuch"))))))
 
 (ert-deftest heisig-gt-kanji-test-reading-columns ()
@@ -215,51 +195,51 @@
   "The romaji filters take a fragment, where the others take a reading."
   (heisig-gt-kanji-test-with-buffer
     ;; 一 is read イチ; the exact filter needs the whole of it.
-    (should (= 0 (heisig-gt-kanji-test-apply 'by-onyomi '("ich"))))
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("ich"))))
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("^i"))))
-    (should (= 0 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("^z"))))
+    (should (= 0 (heisig-gt-test-apply-filter 'by-onyomi '("ich"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-onyomi-romaji '("ich"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-onyomi-romaji '("^i"))))
+    (should (= 0 (heisig-gt-test-apply-filter 'by-onyomi-romaji '("^z"))))
     ;; The two kinds stay apart, as they do for the exact filters.
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-kunyomi-romaji '("hi"))))
-    (should (= 0 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("hito"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-kunyomi-romaji '("hi"))))
+    (should (= 0 (heisig-gt-test-apply-filter 'by-onyomi-romaji '("hito"))))
     ;; However permissive the pattern, a kanji with no reading of
     ;; that kind cannot match: three of the five have an on reading
     ;; and two have a kun one.
-    (should (= 3 (heisig-gt-kanji-test-apply 'by-onyomi-romaji '("."))))
-    (should (= 2 (heisig-gt-kanji-test-apply 'by-kunyomi-romaji '("."))))))
+    (should (= 3 (heisig-gt-test-apply-filter 'by-onyomi-romaji '("."))))
+    (should (= 2 (heisig-gt-test-apply-filter 'by-kunyomi-romaji '("."))))))
 
 (ert-deftest heisig-gt-kanji-test-filter-by-reading ()
   "A reading filter takes either script and keeps the kinds apart."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-onyomi '("イチ"))))
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-onyomi '("ichi"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-onyomi '("イチ"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-onyomi '("ichi"))))
     (goto-char (point-min))
     (should (equal (heisig-gt-kanji--char-at-point) "一"))
     ;; An on reading does not match as a kun one.
-    (should (= 0 (heisig-gt-kanji-test-apply 'by-kunyomi '("ichi"))))
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-kunyomi '("hito"))))
+    (should (= 0 (heisig-gt-test-apply-filter 'by-kunyomi '("ichi"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-kunyomi '("hito"))))
     ;; Values widen, as in every other filter.
-    (should (= 2 (heisig-gt-kanji-test-apply 'by-kunyomi '("hito" "kawa"))))))
+    (should (= 2 (heisig-gt-test-apply-filter 'by-kunyomi '("hito" "kawa"))))))
 
 (ert-deftest heisig-gt-kanji-test-filter-by-used-in ()
   "The inverse filter selects a character's components."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-used-in '("肉"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-used-in '("肉"))))
     (goto-char (point-min))
     (should (equal (heisig-gt-kanji--char-at-point) "[apron]"))))
 
 (ert-deftest heisig-gt-kanji-test-filter-by-status ()
   "Status comes from Anki, and `none' is what Anki does not have."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-status '(review))))
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-status '(suspended))))
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-status '(none))))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-status '(review))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-status '(suspended))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-status '(none))))))
 
 (ert-deftest heisig-gt-kanji-test-filter-by-source ()
   "The source filter matches one name in the comma-separated list."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 3 (heisig-gt-kanji-test-apply 'by-source '("json"))))
-    (should (= 3 (heisig-gt-kanji-test-apply 'by-source '("migaku"))))))
+    (should (= 3 (heisig-gt-test-apply-filter 'by-source '("json"))))
+    (should (= 3 (heisig-gt-test-apply-filter 'by-source '("migaku"))))))
 
 (ert-deftest heisig-gt-kanji-test-filter-description ()
   "The mode-line label drops the `by-' prefix and marks negation."
@@ -301,8 +281,8 @@
 (ert-deftest heisig-gt-kanji-test-filter-by-frame-range ()
   "The frame filter uses the range, and excludes the unnumbered."
   (heisig-gt-kanji-test-with-buffer
-    (should (= 1 (heisig-gt-kanji-test-apply 'by-frame '("1,10"))))
-    (should (= 2 (heisig-gt-kanji-test-apply 'by-frame '(","))))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-frame '("1,10"))))
+    (should (= 2 (heisig-gt-test-apply-filter 'by-frame '(","))))))
 
 ;;;; Sorting
 
@@ -359,7 +339,7 @@
 (ert-deftest heisig-gt-kanji-test-reset-view ()
   "Resetting clears the filters and restores the defaults."
   (heisig-gt-kanji-test-with-buffer
-    (heisig-gt-kanji-test-apply 'by-kind '("primitive"))
+    (heisig-gt-test-apply-filter 'by-kind '("primitive"))
     (heisig-gt-kanji-set-columns '(char))
     (heisig-gt-kanji-reset-view)
     (should (null heisig-gt-kanji--filters))
@@ -372,7 +352,7 @@
   "The mode line names the filters in force and what they left."
   (heisig-gt-kanji-test-with-buffer
     (should (equal (string-trim (heisig-gt-kanji--mode-line)) "5/5"))
-    (heisig-gt-kanji-test-apply 'by-kind '("primitive"))
+    (heisig-gt-test-apply-filter 'by-kind '("primitive"))
     (should (equal (string-trim (heisig-gt-kanji--mode-line))
                    "[kind=primitive] 1/5"))))
 
@@ -412,7 +392,7 @@
 (ert-deftest heisig-gt-kanji-test-go-to-a-filtered-character ()
   "A character the filters exclude is reported as hidden, not absent."
   (heisig-gt-kanji-test-with-buffer
-    (heisig-gt-kanji-test-apply 'by-kind '("primitive"))
+    (heisig-gt-test-apply-filter 'by-kind '("primitive"))
     (let ((message nil))
       (cl-letf (((symbol-function 'message)
                  (lambda (format &rest args)
@@ -441,7 +421,7 @@
 The same view object the state file stores, so the two cannot
 keep different amounts of it."
   (heisig-gt-kanji-test-with-buffer
-    (heisig-gt-kanji-test-apply 'by-kind '("kanji"))
+    (heisig-gt-test-apply-filter 'by-kind '("kanji"))
     (heisig-gt-kanji-set-columns '(char keyword))
     (let ((record (heisig-gt-kanji--make-record)))
       (should (eq (alist-get 'handler record)
@@ -456,7 +436,7 @@ keep different amounts of it."
 Both in place, over a buffer whose view was reset, and into a
 fresh buffer, which is how a saved view arrives."
   (heisig-gt-kanji-test-with-buffer
-    (heisig-gt-kanji-test-apply 'by-kind '("kanji"))
+    (heisig-gt-test-apply-filter 'by-kind '("kanji"))
     (heisig-gt-kanji-set-columns '(char keyword))
     (setq tabulated-list-sort-key '("Keyword" . nil))
     (let ((view (heisig-gt-kanji--view-capture))

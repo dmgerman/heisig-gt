@@ -342,33 +342,38 @@ Comparison ignores case."
   (string-lessp (downcase (heisig-gt-kanji--keyword (car a)))
                 (downcase (heisig-gt-kanji--keyword (car b)))))
 
-(defun heisig-gt-kanji--number-compare (field)
-  "Return a comparator ordering entries by the numeric FIELD.
-A record with no value for FIELD sorts after every record that
-has one, so the unknowns collect at one end instead of being
+(defun heisig-gt-kanji--value-compare (getter)
+  "Return a comparator ordering entries by GETTER\'s number.
+
+GETTER is called with one record and answers with its number.  A
+record it answers nil for sorts after every record it answers a
+number for, so the unknowns collect at one end instead of being
 mixed in as zeroes.  Ties fall back to the keyword, so the order
-is stable."
+is stable.
+
+Where the number comes from is the only thing that varies between
+a sort on a record field and a sort on the Anki study data, so it
+is the only thing passed in."
   (lambda (a b)
-    (let ((x (plist-get (car a) field))
-          (y (plist-get (car b) field)))
+    (let ((x (funcall getter (car a)))
+          (y (funcall getter (car b))))
       (cond ((and (null x) (null y)) (heisig-gt-kanji--compare-keyword a b))
             ((null x) nil)
             ((null y) t)
             ((= x y) (heisig-gt-kanji--compare-keyword a b))
             (t (< x y))))))
 
+(defun heisig-gt-kanji--number-compare (field)
+  "Return a comparator ordering entries by the numeric FIELD."
+  (heisig-gt-kanji--value-compare
+   (lambda (record) (plist-get record field))))
+
 (defun heisig-gt-kanji--study-compare (field)
   "Return a comparator ordering entries by the study FIELD.
 Like `heisig-gt-kanji--number-compare', but reading the value out
 of the Anki study record instead of the kanji record."
-  (lambda (a b)
-    (let ((x (heisig-gt-kanji--study (car a) field))
-          (y (heisig-gt-kanji--study (car b) field)))
-      (cond ((and (null x) (null y)) (heisig-gt-kanji--compare-keyword a b))
-            ((null x) nil)
-            ((null y) t)
-            ((= x y) (heisig-gt-kanji--compare-keyword a b))
-            (t (< x y))))))
+  (heisig-gt-kanji--value-compare
+   (lambda (record) (heisig-gt-kanji--study record field))))
 
 ;;;; Column registry
 

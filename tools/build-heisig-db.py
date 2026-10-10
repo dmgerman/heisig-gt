@@ -805,17 +805,31 @@ def read_tango(specs):
     return levels
 
 
-def lookup_jlpt(record, levels):
-    """Return the JLPT level of RECORD, or None.
+def headword_candidates(record, with_reading=False):
+    """Return the headwords RECORD might be listed under, best first.
 
-    Matched the same three ways the dictionary is, so a word found
-    under its bare lemma or its on-screen spelling is not missed
-    because the list happens to store the other one.
+    UniDic writes a lemma with the sense that disambiguates it
+    attached -- `私-代名詞', `ママ-mama' -- which no headword carries,
+    so the bare lemma is tried next, then the spelling that appeared
+    on screen.
+
+    WITH_READING adds the reading, which is how kana-only words like
+    `だけ' resolve in the dictionary.  The JLPT lists are keyed by
+    lemma and spelling only, so matching a reading against them would
+    be matching on something they do not record.
     """
     lemma = record["lemma"]
-    for candidate in (lemma,
-                      lemma.split(UNIDIC_DISAMBIGUATOR)[0],
-                      record["surface"]):
+    candidates = [lemma,
+                  lemma.split(UNIDIC_DISAMBIGUATOR)[0],
+                  record["surface"]]
+    if with_reading:
+        candidates.append(record["reading"])
+    return [c for c in candidates if c]
+
+
+def lookup_jlpt(record, levels):
+    """Return the JLPT level of RECORD, or None."""
+    for candidate in headword_candidates(record):
         if candidate in levels:
             return levels[candidate]
     return None
@@ -890,18 +904,10 @@ def as_float(value):
 def resolve_word(record, index):
     """Return (ROOT, SENSES) for RECORD, or (None, None) when unknown.
 
-    UniDic writes a lemma with the sense that disambiguates it attached
-    -- `私-代名詞', `ママ-mama' -- which no dictionary headword carries,
-    so the bare lemma is tried next.  Failing both, the reading is
-    tried as a headword of its own, which is how kana-only words like
-    `だけ' resolve.
+    Tried under each of `headword_candidates', the reading included.
     """
-    lemma = record["lemma"]
-    for candidate in (lemma,
-                      lemma.split(UNIDIC_DISAMBIGUATOR)[0],
-                      record["surface"],
-                      record["reading"]):
-        if candidate and candidate in index:
+    for candidate in headword_candidates(record, with_reading=True):
+        if candidate in index:
             return candidate, index[candidate]
     return None, None
 

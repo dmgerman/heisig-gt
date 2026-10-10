@@ -14,28 +14,11 @@
 (require 'heisig-gt-test-helper)
 
 (defmacro heisig-gt-words-test-with-buffer (seed &rest body)
-  "Run BODY in a word-list buffer seeded with SEED."
+  "Run BODY in a word list buffer seeded with SEED."
   (declare (indent 1) (debug t))
-  `(heisig-gt-test-with-db
-     (let ((buffer (generate-new-buffer " *heisig-gt-test-words*"))
-           (heisig-gt-kanji-persist-state nil)
-           (heisig-gt-kanji--state nil)
-           (heisig-gt-kanji--state-loaded t))
-       (unwind-protect
-           (with-current-buffer buffer
-             (heisig-gt-words-mode)
-             (setq heisig-gt-words--seed ,seed)
-             (heisig-gt-kanji--reload)
-             (heisig-gt-kanji--redraw-preserving-point)
-             ,@body)
-         (kill-buffer buffer)))))
-
-(defun heisig-gt-words-test-apply (key values &optional negate)
-  "Apply the filter KEY over VALUES, optionally NEGATE it, and redraw."
-  (setq heisig-gt-kanji--filters
-        (list (list :key key :values values :negate negate)))
-  (heisig-gt-kanji--redraw-preserving-point)
-  heisig-gt-kanji--shown)
+  `(heisig-gt-test-with-list-buffer #'heisig-gt-words-mode
+       (setq heisig-gt-words--seed ,seed)
+     ,@body))
 
 (defun heisig-gt-words-test-roots ()
   "Return the headword of every row now displayed, in order."
@@ -245,41 +228,41 @@ returned nothing where filtering on it returned 107 words."
 (ert-deftest heisig-gt-words-test-narrow-by-further-kanji ()
   "Adding a kanji narrows: the word must use that one as well."
   (heisig-gt-words-test-with-buffer '("目")
-    (should (= 1 (heisig-gt-words-test-apply 'by-kanji '("的"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-kanji '("的"))))
     (should (equal (heisig-gt-words-test-roots) '("目的")))))
 
 (ert-deftest heisig-gt-words-test-narrow-by-romaji ()
   "Pronunciation is searched in romaji, needing no input method."
   (heisig-gt-words-test-with-buffer nil
-    (should (= 1 (heisig-gt-words-test-apply 'by-romaji '("mokuteki"))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-romaji '("mokuteki"))))
     (should (equal (heisig-gt-words-test-roots) '("目的")))
     ;; A regexp, so a fragment selects everything sharing it.
-    (should (= 2 (heisig-gt-words-test-apply 'by-romaji '("^me"))))))
+    (should (= 2 (heisig-gt-test-apply-filter 'by-romaji '("^me"))))))
 
 (ert-deftest heisig-gt-words-test-narrow-by-reading ()
   "The same search is available over the kana."
   (heisig-gt-words-test-with-buffer nil
-    (should (= 1 (heisig-gt-words-test-apply 'by-reading '("もくてき"))))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-reading '("もくてき"))))))
 
 (ert-deftest heisig-gt-words-test-narrow-by-pos ()
   "A word is tagged with a set of parts of speech; any one matches."
   (heisig-gt-words-test-with-buffer nil
-    (should (= 3 (heisig-gt-words-test-apply 'by-pos '("n"))))
+    (should (= 3 (heisig-gt-test-apply-filter 'by-pos '("n"))))
     ;; `v5s vt' is one field holding two tags.
-    (should (= 1 (heisig-gt-words-test-apply 'by-pos '("vt"))))))
+    (should (= 1 (heisig-gt-test-apply-filter 'by-pos '("vt"))))))
 
 (ert-deftest heisig-gt-words-test-narrow-by-jlpt ()
   "Levels widen among themselves, and `none' is what has no level."
   (heisig-gt-words-test-with-buffer nil
-    (should (= 3 (heisig-gt-words-test-apply 'by-jlpt '(5))))
-    (should (= 5 (heisig-gt-words-test-apply 'by-jlpt '(5 4))))
-    (should (= 3 (heisig-gt-words-test-apply 'by-jlpt '(none))))))
+    (should (= 3 (heisig-gt-test-apply-filter 'by-jlpt '(5))))
+    (should (= 5 (heisig-gt-test-apply-filter 'by-jlpt '(5 4))))
+    (should (= 3 (heisig-gt-test-apply-filter 'by-jlpt '(none))))))
 
 (ert-deftest heisig-gt-words-test-narrow-by-rank-range ()
   "The rank filter takes the same ranges the kanji list does."
   (heisig-gt-words-test-with-buffer nil
-    (should (= 3 (heisig-gt-words-test-apply 'by-rank '("1,3"))))
-    (should (= 4 (heisig-gt-words-test-apply 'by-rank '("5,"))))))
+    (should (= 3 (heisig-gt-test-apply-filter 'by-rank '("1,3"))))
+    (should (= 4 (heisig-gt-test-apply-filter 'by-rank '("5,"))))))
 
 (ert-deftest heisig-gt-words-test-filters-compose-with-the-seed ()
   "Seed, then narrow twice: each step is an AND over the last."
@@ -417,7 +400,7 @@ cut-off instead of the one word."
 (ert-deftest heisig-gt-words-test-both-stores-restore-alike ()
   "The state file and a bookmark restore the same view identically."
   (heisig-gt-words-test-with-buffer '("川")
-    (heisig-gt-words-test-apply 'by-pos '("n"))
+    (heisig-gt-test-apply-filter 'by-pos '("n"))
     (let ((view (heisig-gt-kanji--view-capture))
           (record (heisig-gt-kanji--make-record)))
       (should (equal (heisig-gt-test-view-restored

@@ -56,6 +56,45 @@ what another left behind."
          (setq heisig-gt-db--study-table nil)
          (setq heisig-gt-db-study-unavailable nil)))))
 
+(defun heisig-gt-test-apply-filter (key values &optional negate)
+  "Apply the filter KEY over VALUES in this buffer, and redraw.
+NEGATE selects what the filter would otherwise reject.  Returns
+the number of rows left, which is what a filter test asserts on.
+
+One function, not one per list: the two had byte-identical copies
+of this, which is the cheapest kind of duplication to find and
+had no excuse for surviving."
+  (setq heisig-gt-kanji--filters
+        (list (list :key key :values values :negate negate)))
+  (heisig-gt-kanji--redraw-preserving-point)
+  heisig-gt-kanji--shown)
+
+;;;; List buffers
+
+(defmacro heisig-gt-test-with-list-buffer (mode setup &rest body)
+  "Run BODY in a fresh buffer of MODE, loaded from the fixtures.
+
+SETUP runs after the mode is entered and before the records are
+read -- where a mode that has a scope to set puts it, so nothing
+is loaded twice.
+
+State persistence is bound off throughout, so no test can write
+the developer\'s state file."
+  (declare (indent 2) (debug t))
+  `(heisig-gt-test-with-db
+     (let ((buffer (generate-new-buffer " *heisig-gt-test-list*"))
+           (heisig-gt-kanji-persist-state nil)
+           (heisig-gt-kanji--state nil)
+           (heisig-gt-kanji--state-loaded t))
+       (unwind-protect
+           (with-current-buffer buffer
+             (funcall ,mode)
+             ,setup
+             (heisig-gt-kanji--reload)
+             (heisig-gt-kanji--redraw-preserving-point)
+             ,@body)
+         (kill-buffer buffer)))))
+
 (defun heisig-gt-test-view-restored (mode view)
   "Return what VIEW amounts to once restored into a MODE buffer.
 
