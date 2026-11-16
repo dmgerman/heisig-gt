@@ -51,7 +51,9 @@ character — asking per row would be ~2000 queries per redraw. Rows are
 re-found by character after a redraw, since records are rebuilt on every
 read. The only advice installed is `:after` on `tabulated-list-sort`, guarded
 by `derived-mode-p`, because header-click sorting never passes through a
-command of the mode and is otherwise invisible to state persistence.
+command of the mode and is otherwise invisible to state persistence. The
+mode installs it (not the file at load time, which melpazoid flags), and
+`heisig-gt-kanji-unload-function` removes it for `unload-feature`.
 
 ## Things that bit us
 
@@ -191,12 +193,11 @@ make check-ci      # the same under emacs-plus@30 and @31 — run before pushing
 make db            # build ~/.emacs.d/heisig-gt.db from Anki + kanji-all.json
 ```
 
-`Makefile.common` here is the copy from `org-roam-gt`, not the one at
-`modules/dmg/Makefile.common`: the canonical copy lacks the `MAIN_FILE`
-variable that sets `package-lint-main-file`, without which `make lint` fails
-with a hundred "you should depend on (emacs 24.3)" errors. The canonical copy
-needs updating and re-syncing; until then, `sync-makefile-common.sh --check`
-reports this package as DIFFERS, as it already does for `org-roam-gt`.
+`Makefile.common` is the shared copy from `modules/dmg/Makefile.common`,
+kept identical by `modules/dmg/sync-makefile-common.sh`; never edit it here.
+It sets `package-lint-main-file` from `MAIN_FILE` (default `heisig-gt.el`),
+without which `make lint` fails with a hundred "you should depend on
+(emacs 24.3)" errors. `make check-ci` also runs melpazoid once at the end.
 
 ## Test environment
 

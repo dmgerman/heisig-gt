@@ -1,6 +1,8 @@
 *~
 *.elc
 .elpa/
+.elpa-melpa/
+.melpazoid/
 .claude
 ai/*.org
 heisig-gt.db

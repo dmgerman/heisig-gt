@@ -753,8 +753,12 @@ command of this mode, so it is invisible to every other hook
 `heisig-gt-kanji--state-changed' runs from."
   (heisig-gt-kanji--state-changed))
 
-(advice-add 'tabulated-list-sort :after
-            #'heisig-gt-kanji--tabulated-sort-observer)
+(defun heisig-gt-kanji-unload-function ()
+  "Remove the sort observer, for `unload-feature'.
+Return nil so the rest of the unloading proceeds as usual."
+  (advice-remove 'tabulated-list-sort
+                 #'heisig-gt-kanji--tabulated-sort-observer)
+  nil)
 
 ;;;; Mode + keymap
 
@@ -865,6 +869,11 @@ to cycle through the sortable columns.
   (setq-local revert-buffer-function #'heisig-gt-kanji--revert)
   (setq-local bookmark-make-record-function #'heisig-gt-kanji--make-record)
   (setq-local mode-line-process '(:eval (heisig-gt-kanji--mode-line)))
+  ;; Installed here rather than at load time, so that loading the
+  ;; package changes nothing outside it.  Adding the same advice again
+  ;; is a no-op, and the observer acts only in buffers of this mode.
+  (advice-add 'tabulated-list-sort :after
+              #'heisig-gt-kanji--tabulated-sort-observer)
   (unless heisig-gt-kanji--state-loaded
     (heisig-gt-kanji--state-load))
   (heisig-gt-kanji--state-apply)

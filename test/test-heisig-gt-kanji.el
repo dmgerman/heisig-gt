@@ -344,6 +344,33 @@ was blank."
     (should (member (car tabulated-list-sort-key)
                     (heisig-gt-kanji--sortable-columns)))))
 
+(ert-deftest heisig-gt-kanji-test-header-sort-records-the-view ()
+  "Sorting through `tabulated-list-sort', as a header click does, saves.
+The observer that catches it is installed by the mode, not at load."
+  (heisig-gt-kanji-test-with-buffer
+    (should (advice-member-p #'heisig-gt-kanji--tabulated-sort-observer
+                             'tabulated-list-sort))
+    (let ((heisig-gt-kanji-persist-state t)
+          (saved 0)
+          (column (seq-position (append tabulated-list-format nil) "Keyword"
+                                (lambda (entry name) (equal (car entry) name)))))
+      (cl-letf (((symbol-function 'heisig-gt-kanji-save-state)
+                 (lambda () (setq saved (1+ saved)))))
+        (tabulated-list-sort column))
+      (should (= saved 1)))))
+
+(ert-deftest heisig-gt-kanji-test-unload-function-removes-the-advice ()
+  "`unload-feature' leaves `tabulated-list-sort' as it found it."
+  (advice-add 'tabulated-list-sort :after
+              #'heisig-gt-kanji--tabulated-sort-observer)
+  (unwind-protect
+      (progn
+        (should-not (heisig-gt-kanji-unload-function))
+        (should-not (advice-member-p #'heisig-gt-kanji--tabulated-sort-observer
+                                     'tabulated-list-sort)))
+    (advice-add 'tabulated-list-sort :after
+                #'heisig-gt-kanji--tabulated-sort-observer)))
+
 ;;;; Columns
 
 (ert-deftest heisig-gt-kanji-test-toggle-column-round-trip ()
