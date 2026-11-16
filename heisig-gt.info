@@ -157,7 +157,8 @@ File: heisig-gt.info,  Node: Columns,  Next: Filters,  Up: The kanji list
 ‘heisig-gt-kanji-columns’ is both the set of columns displayed and their
 left-to-right order, so showing, hiding and reordering are one setting
 rather than three.  Every column lives in
-‘heisig-gt-kanji-column-alist’:
+‘heisig-gt-kanji-column-alist’, declaring either the record field it
+shows (‘:field’) or a function that computes its text (‘:value’):
 
      heisig      Heisig frame number, sixth edition
      char        the character itself
@@ -524,18 +525,18 @@ Node: Build the database1833
 Node: Load it2433
 Node: The kanji list2723
 Node: Columns4063
-Node: Filters5643
-Node: Readings7382
-Node: Saving a view9136
-Node: Component names9754
-Node: The word list10949
-Node: How much to load13288
-Node: Where the words come from14008
-Node: The detail buffer15508
-Node: Study progress16576
-Node: Where the data comes from17588
-Node: Development18768
-Node: License19715
+Node: Filters5754
+Node: Readings7493
+Node: Saving a view9247
+Node: Component names9865
+Node: The word list11060
+Node: How much to load13399
+Node: Where the words come from14119
+Node: The detail buffer15619
+Node: Study progress16687
+Node: Where the data comes from17699
+Node: Development18879
+Node: License19826
 
 End Tag Table
 
